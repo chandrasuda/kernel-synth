@@ -12,6 +12,8 @@ trajectory file.
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -50,6 +52,23 @@ def main(argv: list[str] | None = None) -> int:
         default=180.0,
         help="Per-env benchmark subprocess timeout (s).",
     )
+    parser.add_argument(
+        "--filter",
+        default=None,
+        help=(
+            "Optional regex; only env folder names matching it are run. "
+            "Useful for re-trying a single failing env without disturbing "
+            "the leaderboard view."
+        ),
+    )
+    parser.add_argument(
+        "--out-json",
+        default=None,
+        help=(
+            "Optional path to write the full leaderboard rows as JSON "
+            "(in addition to printing the rich table)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     envs_root = Path(args.envs_root).resolve()
@@ -61,6 +80,13 @@ def main(argv: list[str] | None = None) -> int:
         d for d in envs_root.iterdir()
         if d.is_dir() and (d / "benchmark.py").is_file()
     )
+    if args.filter:
+        try:
+            pattern = re.compile(args.filter)
+        except re.error as e:
+            console.print(f"[red]invalid --filter regex: {e}[/red]")
+            return 4
+        envs = [d for d in envs if pattern.search(d.name)]
     if args.limit > 0:
         envs = envs[: args.limit]
 
@@ -145,6 +171,12 @@ def main(argv: list[str] | None = None) -> int:
     console.print(
         f"\n[green]{n_ok}[/green]/{len(rows)} envs produced a valid trajectory."
     )
+
+    if args.out_json:
+        out_path = Path(args.out_json)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(rows, indent=2, default=str), encoding="utf-8")
+        console.print(f"[dim]wrote leaderboard to[/dim] [green]{out_path}[/green]")
     return 0 if n_ok == len(rows) else 1
 
 
