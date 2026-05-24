@@ -1004,10 +1004,27 @@ def _time(module, args, kwargs, runs: int, warmup: int) -> tuple[object, float]:
     return out, (time.perf_counter() - t0) * 1000.0 / runs
 
 
-def _allclose(a, b, rtol=1e-3, atol=1e-4):
+_DTYPE_TOLERANCES = {{
+    "torch.float32": (1e-3, 1e-4),
+    "torch.float64": (1e-5, 1e-6),
+    "torch.bfloat16": (1e-2, 1e-2),
+    "torch.float16": (5e-3, 5e-3),
+}}
+
+
+def _tols_for(dtype) -> tuple:
+    """rtol/atol pair appropriate for ``dtype``; conservative default."""
+    return _DTYPE_TOLERANCES.get(str(dtype), (1e-3, 1e-4))
+
+
+def _allclose(a, b, rtol=None, atol=None):
     if isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
         if a.shape != b.shape:
             return False, float("inf")
+        if rtol is None or atol is None:
+            r_d, a_d = _tols_for(a.dtype)
+            rtol = r_d if rtol is None else rtol
+            atol = a_d if atol is None else atol
         af = a.detach().float()
         bf = b.detach().float()
         diff = (af - bf).abs().max().item()
