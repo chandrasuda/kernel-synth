@@ -17,6 +17,14 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 
 # --- helper definitions lifted from the source file (used by the class) ---
+try:
+    from torch.nn.functional import scaled_dot_product_attention
+
+    SDPA_AVAILABLE = True
+except (ImportError, RuntimeError, OSError):
+    scaled_dot_product_attention = None
+    SDPA_AVAILABLE = False
+
 class LayerNorm(nn.LayerNorm):
     def forward(self, x: Tensor) -> Tensor:
         return super().forward(x.float()).type(x.dtype)

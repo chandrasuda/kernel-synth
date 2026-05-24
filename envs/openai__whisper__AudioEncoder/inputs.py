@@ -13,29 +13,7 @@ The BATCH/SEQ_LEN/HIDDEN/HEADS/HEAD_DIM constants below are re-exported
 because benchmark.py imports them at module scope; only BATCH is actually
 consumed by build_forward_inputs.
 """
-import sys as _sys
-
 import torch
-
-# ---------------------------------------------------------------------------
-# Workaround for a missing-symbol bug in the auto-generated reference.py:
-# the whisper source uses `SDPA_AVAILABLE` and `scaled_dot_product_attention`
-# (typically imported from torch.nn.functional via a feature-flag dance), but
-# the env_builder's import filter dropped them. Without a patch, the very
-# first forward pass raises `NameError: name 'SDPA_AVAILABLE' is not defined`
-# from `MultiHeadAttention.qkv_attention`.
-#
-# We can't edit reference.py (frozen), but benchmark.py imports `reference`
-# BEFORE it imports anything from `inputs`, so by the time this module body
-# runs, `reference` is already in sys.modules and we can inject the flag.
-# With SDPA_AVAILABLE=False, Python short-circuits the `and` in
-#     if SDPA_AVAILABLE and MultiHeadAttention.use_sdpa: ...
-# so `scaled_dot_product_attention` is never looked up either, and the
-# standard-ops fallback (mathematically identical) is taken.
-# ---------------------------------------------------------------------------
-_ref_mod = _sys.modules.get("reference")
-if _ref_mod is not None and not hasattr(_ref_mod, "SDPA_AVAILABLE"):
-    _ref_mod.SDPA_AVAILABLE = False
 
 # Shared problem-size knobs.
 BATCH = 1                  # Whisper is heavy on CPU; keep batch=1.

@@ -298,6 +298,12 @@ def _extract_imports(source_file: Path, class_source: str | None = None) -> str:
             elif isinstance(node, ast.ClassDef):
                 if node.name in needed and node.name != self_class_name:
                     needed.update(_names_referenced_node(node))
+            elif isinstance(node, ast.Try):
+                if _try_block_binds(node) & needed:
+                    needed.update(_names_referenced_node(node))
+            elif isinstance(node, ast.If):
+                if _if_block_binds(node) & needed:
+                    needed.update(_names_referenced_node(node))
         if len(needed) == before:
             break
 
@@ -323,6 +329,17 @@ def _extract_imports(source_file: Path, class_source: str | None = None) -> str:
                     break
         elif isinstance(node, ast.ClassDef):
             keep = node.name in needed and node.name != self_class_name
+        elif isinstance(node, ast.Try):
+            # Whisper-style ``try: from torch.nn.functional import SDPA;
+            # SDPA_AVAILABLE = True; except ...: SDPA_AVAILABLE = False``
+            # blocks define a feature-flag the class references. We
+            # preserve the whole try/except verbatim so the fallback
+            # branch survives too.
+            keep = bool(_try_block_binds(node) & needed)
+        elif isinstance(node, ast.If):
+            # Conditional imports (``if torch_version >= ...: import x``)
+            # follow the same pattern as the try/except case.
+            keep = bool(_if_block_binds(node) & needed)
 
         if keep:
             end = getattr(node, "end_lineno", node.lineno)
@@ -343,6 +360,48 @@ def _extract_imports(source_file: Path, class_source: str | None = None) -> str:
         )
         out += "\n\n".join(helper_lines) + "\n"
     return out
+
+
+def _try_block_binds(node: ast.Try) -> set[str]:
+    """Names bound by a top-level ``try/except`` block.
+
+    Walks ``body`` and every ``handler.body`` looking for ``Import`` /
+    ``ImportFrom`` / ``Assign`` to a bare Name. Used to keep blocks like
+    ``try: from torch.nn.functional import sdpa; FLAG = True;
+    except: FLAG = False`` together when the class references ``FLAG``.
+    """
+    bound: set[str] = set()
+    for branch in (node.body, *(h.body for h in (node.handlers or [])), node.orelse or [], node.finalbody or []):
+        for stmt in branch:
+            bound |= _stmt_binds(stmt)
+    return bound
+
+
+def _if_block_binds(node: ast.If) -> set[str]:
+    bound: set[str] = set()
+    for branch in (node.body, node.orelse or []):
+        for stmt in branch:
+            bound |= _stmt_binds(stmt)
+    return bound
+
+
+def _stmt_binds(stmt: ast.stmt) -> set[str]:
+    bound: set[str] = set()
+    if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+        bound |= _imported_names(stmt)
+    elif isinstance(stmt, ast.Assign):
+        for tgt in stmt.targets:
+            if isinstance(tgt, ast.Name):
+                bound.add(tgt.id)
+    elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+        bound.add(stmt.target.id)
+    elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        bound.add(stmt.name)
+    elif isinstance(stmt, ast.Try):
+        bound |= _try_block_binds(stmt)
+    elif isinstance(stmt, ast.If):
+        bound |= _if_block_binds(stmt)
+    return bound
 
 
 def _names_referenced_node(node: ast.AST) -> set[str]:
