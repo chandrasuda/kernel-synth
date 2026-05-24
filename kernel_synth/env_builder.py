@@ -1047,6 +1047,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--dtype",
+        choices=("fp32", "fp16", "bf16"),
+        default="fp32",
+        help=(
+            "Floating-point dtype for module weights and inputs. "
+            "fp16/bf16 only make sense on CUDA; on CPU they fall back to "
+            "fp32 with a warning since most kernels lack a CPU half path."
+        ),
+    )
+    parser.add_argument(
         "--check-only",
         action="store_true",
         help="Skip timing — only verify correctness against eager.",
@@ -1065,6 +1075,20 @@ def main(argv: list[str] | None = None) -> int:
             return 9
         active_device = args.device
 
+    _dtype_map = {{
+        "fp32": torch.float32,
+        "fp16": torch.float16,
+        "bf16": torch.bfloat16,
+    }}
+    active_dtype = _dtype_map[args.dtype]
+    dtype_warnings: list = []
+    if active_dtype != torch.float32 and active_device == "cpu":
+        dtype_warnings.append(
+            f"dtype={{args.dtype}} requested on CPU; falling back to fp32"
+            " since most kernels lack a CPU half path."
+        )
+        active_dtype = torch.float32
+
     import os as _os
     torch.manual_seed(int(_os.environ.get("KERNEL_SYNTH_SEED", "0")))
 
@@ -1073,7 +1097,7 @@ def main(argv: list[str] | None = None) -> int:
         "runs": args.runs,
         "warmup": args.warmup,
         "device": active_device,
-        "dtype": "torch.float32",
+        "dtype": str(active_dtype),
         "eager_ms": None,
         "compile_ms": None,
         "solution_ms": None,
@@ -1099,9 +1123,12 @@ def main(argv: list[str] | None = None) -> int:
         _emit(result, args.json)
         return 2
 
-    # The --device flag overrides whatever inputs.DEVICE picked at import
-    # time so a single benchmark.py invocation is honest about where it ran.
+    # The --device / --dtype flags override whatever inputs.{{DEVICE,DTYPE}}
+    # picked at import time so a single benchmark.py invocation is honest
+    # about where + at what precision it ran.
     DEVICE = active_device
+    DTYPE = active_dtype
+    result["warnings"].extend(dtype_warnings)
 
     try:
         kwargs = build_module_kwargs()
