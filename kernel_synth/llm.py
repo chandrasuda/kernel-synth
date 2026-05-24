@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal
@@ -273,6 +274,26 @@ def _anthropic_msg_to_openai(m: dict) -> list[dict]:
 def is_available() -> bool:
     """True if either provider has an API key in the environment."""
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("OPENAI_API_KEY"))
+
+
+# Matches the Anthropic / OpenAI / generic ``sk-...`` API key shape — at
+# least 20 url-safe characters after the ``sk-`` prefix. The trailing
+# boundary is anchored on a non-word character (or string end) so we don't
+# eat surrounding punctuation in the redacted log line.
+_SECRET_RE = re.compile(r"sk-[A-Za-z0-9_\-]{20,}")
+
+
+def _redact_secrets(text: str) -> str:
+    """Scrub API-key-shaped tokens from ``text`` before it lands in a log.
+
+    Returns the input unchanged when no match is found, so it's safe to
+    apply to short / structured messages. Each match is replaced with
+    ``"sk-***REDACTED***"`` regardless of the original length so the
+    redacted form gives no hint about the secret length.
+    """
+    if not isinstance(text, str) or "sk-" not in text:
+        return text
+    return _SECRET_RE.sub("sk-***REDACTED***", text)
 
 
 # Names of exception classes we always treat as transient regardless of
