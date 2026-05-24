@@ -482,11 +482,29 @@ class KernelAgentTools:
     def _resolve(self, path: str) -> Path:
         if not path:
             raise ToolError("missing path")
+        # Reject absolute paths up-front. ``(env_dir / "/etc/passwd").resolve``
+        # collapses the join entirely and lands at /etc/passwd, so by the
+        # time the ``relative_to`` check below runs the escape has already
+        # been performed — better to bail before we ever build the Path.
+        if path.startswith(("/", "\\")) or (len(path) > 1 and path[1] == ":"):
+            raise ToolError(f"absolute paths are not allowed: {path}")
         p = (self.env_dir / path).resolve()
         try:
             p.relative_to(self.env_dir)
         except ValueError as e:
             raise ToolError(f"path escapes env folder: {path}") from e
+        # ``Path.resolve`` follows symlinks; verify the FINAL target is
+        # still inside the env folder. Without this check a symlink at
+        # ``env/workspace/escape -> /tmp`` would let writes land outside
+        # the sandbox even though the unresolved path looks safe.
+        try:
+            real_env = self.env_dir.resolve(strict=False)
+            real_p = p.resolve(strict=False)
+            real_p.relative_to(real_env)
+        except ValueError as e:
+            raise ToolError(
+                f"resolved path escapes env folder via symlink: {path}"
+            ) from e
         return p
 
     def _assert_writable(self, rel: Path) -> None:
