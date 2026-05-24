@@ -894,39 +894,19 @@ def _write_solution(path: Path, *, cand: ModuleCandidate) -> None:
 
 
 def _write_triton_kernels(path: Path, *, cand: ModuleCandidate) -> None:
-    """Empty-ish Triton kernel module the agent can fill in."""
+    """Triton kernel module with a worked softmax kernel commented out.
+
+    The agent can uncomment the block as a starting point for any reduction
+    kernel — the same pattern (one program per row, ``tl.max`` / ``tl.sum``
+    over the BLOCK axis) covers softmax, log-softmax, RMSNorm, etc.
+    """
     text = textwrap.dedent(f'''\
         """Triton kernels for {cand.class_name}.
 
-        Fill this in. Typical pattern::
-
-            import triton
-            import triton.language as tl
-
-
-            @triton.jit
-            def my_fused_kernel(
-                X_ptr, Y_ptr, OUT_ptr,
-                N: tl.constexpr,
-                BLOCK_SIZE: tl.constexpr,
-            ):
-                pid = tl.program_id(0)
-                offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
-                mask = offsets < N
-                x = tl.load(X_ptr + offsets, mask=mask)
-                y = tl.load(Y_ptr + offsets, mask=mask)
-                tl.store(OUT_ptr + offsets, x + y, mask=mask)
-
-
-            def fused_add(x, y):
-                out = torch.empty_like(x)
-                N = x.numel()
-                BLOCK = 1024
-                grid = ((N + BLOCK - 1) // BLOCK,)
-                my_fused_kernel[grid](x, y, out, N, BLOCK)
-                return out
-
-        Then import + call ``fused_add`` from ``solution.py``.
+        Fill this in. The block below is a working numerically-stable
+        rowwise softmax — uncomment and adapt it as a template for any
+        reduction-shaped op. Replace the inner ``tl.exp`` / ``tl.sum``
+        math with whatever the reference module needs.
 
         Tips
         ----
@@ -934,12 +914,54 @@ def _write_triton_kernels(path: Path, *, cand: ModuleCandidate) -> None:
         * On CUDA, prefer ``tl.dot`` over hand-rolled matmuls.
         * Keep a Python fallback in solution.py for shapes your kernel
           doesn't support — better correct & slow than broken.
+        * ``triton.next_power_of_2(n)`` is the right way to pick ``BLOCK_SIZE``
+          when the row width is dynamic.
         """
         from __future__ import annotations
 
-        # Optional — Triton isn't available on every machine. Import lazily so
-        # importing this module never explodes; the agent should add the
-        # ``import triton`` line right alongside its kernels.
+        # Optional — Triton isn't available on every machine. Import lazily
+        # so importing this module never explodes; uncomment ``import triton``
+        # / ``import triton.language as tl`` once you start writing kernels.
+        # import torch
+        # import triton
+        # import triton.language as tl
+        #
+        #
+        # @triton.jit
+        # def _softmax_kernel(
+        #     OUT_ptr,
+        #     IN_ptr,
+        #     in_row_stride,
+        #     out_row_stride,
+        #     n_cols,
+        #     BLOCK_SIZE: tl.constexpr,
+        # ):
+        #     """One program per row: subtract row-max, exp, divide by row-sum."""
+        #     row_idx = tl.program_id(0)
+        #     col_offsets = tl.arange(0, BLOCK_SIZE)
+        #     mask = col_offsets < n_cols
+        #     row_start_in = IN_ptr + row_idx * in_row_stride
+        #     row_start_out = OUT_ptr + row_idx * out_row_stride
+        #     x = tl.load(row_start_in + col_offsets, mask=mask, other=-float("inf"))
+        #     x_minus_max = x - tl.max(x, axis=0)
+        #     numerator = tl.exp(x_minus_max)
+        #     denominator = tl.sum(numerator, axis=0)
+        #     tl.store(row_start_out + col_offsets, numerator / denominator, mask=mask)
+        #
+        #
+        # def triton_softmax(x: "torch.Tensor") -> "torch.Tensor":
+        #     """Numerically-stable rowwise softmax over the last dim."""
+        #     assert x.is_cuda and x.dtype == torch.float32
+        #     *leading, n_cols = x.shape
+        #     x2 = x.reshape(-1, n_cols).contiguous()
+        #     out = torch.empty_like(x2)
+        #     BLOCK_SIZE = triton.next_power_of_2(n_cols)
+        #     _softmax_kernel[(x2.shape[0],)](
+        #         out, x2,
+        #         x2.stride(0), out.stride(0),
+        #         n_cols, BLOCK_SIZE=BLOCK_SIZE, num_warps=4,
+        #     )
+        #     return out.reshape(*leading, n_cols)
         ''')
     path.write_text(text, encoding="utf-8")
 
