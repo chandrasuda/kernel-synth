@@ -560,6 +560,52 @@ code, pre, .mono { font-family: var(--mono); }
   color: #d6cdff;
 }
 
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.chips .chip {
+  font-size: 11px;
+  font-family: var(--mono);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.chips .chip:hover { color: var(--text); border-color: var(--line-strong); }
+.chips .chip.active {
+  background: rgba(138, 109, 255, 0.18);
+  border-color: rgba(138, 109, 255, 0.4);
+  color: #ecebf5;
+}
+.chips .chip .chip-count {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.chips-active {
+  margin-top: 8px;
+  font-size: 12px;
+  min-height: 18px;
+}
+.chips-active .chip-clear {
+  margin-left: 6px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.chips-active .chip-clear:hover { color: var(--text); border-color: var(--line-strong); }
+
 .envs-table-wrap {
   padding: 0;
   overflow: hidden;

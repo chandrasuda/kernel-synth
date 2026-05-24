@@ -19,6 +19,7 @@
     filter: "",
     envs: null,
     activeTab: "repos",
+    envTagFilter: null, // single active chip name, or null = show all
   };
 
   // -----------------------------------------------------------
@@ -321,6 +322,35 @@
     const withReward = envs.filter((e) => e.best_reward !== null && e.best_reward !== undefined);
     const traced = envs.filter((e) => (e.n_traces || 0) > 0);
 
+    // Tally tags across all envs once, then render the top 18 as chips.
+    const tagCounts = new Map();
+    for (const e of envs) {
+      for (const t of e.tags || []) {
+        tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+      }
+    }
+    const topTags = [...tagCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 18);
+    const chipsHTML = topTags
+      .map(([t, n]) => {
+        const active = state.envTagFilter === t ? " active" : "";
+        return `<button class="chip${active}" data-tag="${escape(
+          t
+        )}">${escape(t)} <span class="chip-count">${n}</span></button>`;
+      })
+      .join("");
+
+    const filtered = state.envTagFilter
+      ? envs.filter((e) => (e.tags || []).includes(state.envTagFilter))
+      : envs;
+
+    const activeChipNote = state.envTagFilter
+      ? `<span class="muted">tag <b>${escape(
+          state.envTagFilter
+        )}</b> · ${filtered.length} env(s) <button class="chip-clear" id="chip-clear">clear</button></span>`
+      : "";
+
     const summary = `
       <div class="envs-header glass">
         <div>
@@ -335,11 +365,13 @@
             ·
             <code>--mode agent</code>
           </p>
+          <div class="chips" id="env-chips">${chipsHTML}</div>
+          <div class="chips-active">${activeChipNote}</div>
         </div>
       </div>
     `;
 
-    const tableRows = envs
+    const tableRows = filtered
       .map((e) => {
         const best = fmtReward(e.best_reward);
         const latest = fmtReward(e.latest_reward);
@@ -397,6 +429,24 @@
     `;
 
     envsContentEl.innerHTML = `<div class="repo-detail">${summary}${table}</div>`;
+
+    const chipsEl = document.getElementById("env-chips");
+    if (chipsEl) {
+      chipsEl.addEventListener("click", (ev) => {
+        const btn = ev.target.closest("button[data-tag]");
+        if (!btn) return;
+        const tag = btn.dataset.tag;
+        state.envTagFilter = state.envTagFilter === tag ? null : tag;
+        renderEnvs(state.envs);
+      });
+    }
+    const clearBtn = document.getElementById("chip-clear");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        state.envTagFilter = null;
+        renderEnvs(state.envs);
+      });
+    }
   }
 
   function renderRunnableCell(e) {
