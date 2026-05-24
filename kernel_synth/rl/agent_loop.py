@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from ..llm import LLMClient
+from ..llm import LLMClient, _redact_secrets
 from .atif import (
     AtifAgent,
     FinalMetrics,
@@ -319,11 +319,12 @@ def _rollout_agent(
                 tools=KernelAgentTools.TOOL_SCHEMAS,
             )
         except Exception as e:  # noqa: BLE001
+            redacted = _redact_secrets(repr(e))
             builder.add_step(
                 source="agent",
                 model_name=llm.model,
-                message=f"(LLM error: {e!r})",
-                metrics=Metrics(extra={"per_step_reward": 0.0, "llm_error": repr(e)}),
+                message=f"(LLM error: {redacted})",
+                metrics=Metrics(extra={"per_step_reward": 0.0, "llm_error": redacted}),
             )
             break
         llm_call_count += 1
