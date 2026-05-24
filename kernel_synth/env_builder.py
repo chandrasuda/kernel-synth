@@ -22,6 +22,8 @@ import ast
 import inspect
 import json
 import re
+import subprocess
+import sys
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
@@ -67,7 +69,20 @@ def build_env(
     _write_triton_kernels(env_dir / "triton_kernels.py", cand=cand)
     _write_harness(env_dir / "harness.py", cand=cand)
     _write_benchmark(env_dir / "benchmark.py", cand=cand)
-    _write_env_json(env_dir / "env.json", record=record, cand=cand)
+
+    # Probe by importing reference and running build_module_kwargs(). This
+    # surfaces broken envs immediately without having to run the benchmark
+    # subprocess. We run it in a fresh subprocess so a bad env can't poison
+    # this process's sys.modules with half-loaded reference.py.
+    runnable, runnable_error = _probe_runnable(env_dir)
+
+    _write_env_json(
+        env_dir / "env.json",
+        record=record,
+        cand=cand,
+        runnable=runnable,
+        runnable_error=runnable_error,
+    )
     _write_readme(
         env_dir / "README.md",
         record=record,
@@ -1363,9 +1378,14 @@ def _write_harness(path: Path, *, cand: ModuleCandidate) -> None:
 
 
 def _write_env_json(
-    path: Path, *, record: RepoRecord, cand: ModuleCandidate
+    path: Path,
+    *,
+    record: RepoRecord,
+    cand: ModuleCandidate,
+    runnable: bool | None = None,
+    runnable_error: str | None = None,
 ) -> None:
-    payload = {
+    payload: dict[str, Any] = {
         "name": env_name(record, cand),
         "class_name": cand.class_name,
         "source": {
@@ -1387,6 +1407,10 @@ def _write_env_json(
         },
         "version": "0.1.0",
     }
+    if runnable is not None:
+        payload["runnable"] = bool(runnable)
+        if not runnable and runnable_error:
+            payload["runnable_error"] = runnable_error
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -1465,6 +1489,59 @@ def _write_readme(
         """
     )
     path.write_text(text, encoding="utf-8")
+
+
+_PROBE_SCRIPT = """
+import json
+import sys
+import traceback
+from pathlib import Path
+
+sys.path.insert(0, str(Path('.').resolve()))
+out = {"ok": False}
+try:
+    import reference  # noqa: F401
+    from inputs import build_module_kwargs
+    build_module_kwargs()
+    out["ok"] = True
+except BaseException as e:  # noqa: BLE001
+    out["error"] = repr(e)
+    out["traceback"] = traceback.format_exc(limit=3)
+print(json.dumps(out))
+"""
+
+
+def _probe_runnable(env_dir: Path, *, timeout: float = 20.0) -> tuple[bool, str | None]:
+    """Quickly check if ``reference.py`` + ``inputs.build_module_kwargs()`` work.
+
+    Runs in a fresh subprocess so any import side-effects (registering custom
+    ops, mutating torch._dynamo, etc.) stay scoped. Returns ``(ok, error)``
+    where ``error`` is a short repr on failure and ``None`` on success.
+    """
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", _PROBE_SCRIPT],
+            cwd=str(env_dir),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"probe timed out after {timeout:.0f}s"
+    except OSError as e:
+        return False, f"probe spawn failed: {e!r}"
+    stdout = (proc.stdout or "").strip()
+    if not stdout:
+        tail = (proc.stderr or "").strip()[-300:]
+        return False, f"no probe output (rc={proc.returncode}): {tail}"
+    try:
+        result = json.loads(stdout.splitlines()[-1])
+    except json.JSONDecodeError:
+        return False, "probe output not JSON"
+    if result.get("ok"):
+        return True, None
+    err = str(result.get("error", "unknown probe failure"))[:300]
+    return False, err
 
 
 def _format_sig(sig: SigInfo | None) -> str:

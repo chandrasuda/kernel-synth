@@ -331,6 +331,7 @@
           .slice(0, 3)
           .map((t) => `<span class="tag">${escape(t)}</span>`)
           .join("");
+        const runnable = renderRunnableCell(e);
         return `
           <tr>
             <td class="mono">${escape(e.slug)}</td>
@@ -339,6 +340,7 @@
           e.repo || ""
         )}</a></td>
             <td class="tags-cell">${tags}</td>
+            <td>${runnable}</td>
             <td class="right">${e.n_traces || 0}</td>
             <td class="right reward ${rewardClass(e.best_reward)}">${best}</td>
             <td class="right reward ${rewardClass(e.latest_reward)}">${latest}</td>
@@ -358,6 +360,7 @@
               <th>class</th>
               <th>repo</th>
               <th>tags</th>
+              <th>runnable</th>
               <th class="right">traces</th>
               <th class="right">best reward</th>
               <th class="right">latest reward</th>
@@ -371,6 +374,19 @@
     `;
 
     envsContentEl.innerHTML = `<div class="repo-detail">${summary}${table}</div>`;
+  }
+
+  function renderRunnableCell(e) {
+    if (e.runnable === true) {
+      return `<span class="pill runnable-yes" title="reference imports + inputs.build_module_kwargs() succeeded at build time">ok</span>`;
+    }
+    if (e.runnable === false) {
+      const detail = e.runnable_error ? ` — ${e.runnable_error}` : "";
+      return `<span class="pill runnable-no" title="${escape(
+        "build-time probe failed" + detail
+      )}">err</span>`;
+    }
+    return `<span class="muted" title="not probed (rebuild envs to populate)">—</span>`;
   }
 
   function fmtReward(v) {

@@ -593,6 +593,17 @@ code, pre, .mono { font-family: var(--mono); }
 .envs-table td.right,
 .envs-table th.right { text-align: right; font-family: var(--mono); }
 .envs-table td.tags-cell .tag { margin-right: 4px; }
+.envs-table .pill.runnable-yes {
+  background: rgba(109, 247, 193, 0.10);
+  border-color: rgba(109, 247, 193, 0.32);
+  color: var(--green);
+}
+.envs-table .pill.runnable-no {
+  background: rgba(255, 110, 163, 0.10);
+  border-color: rgba(255, 110, 163, 0.32);
+  color: var(--rose);
+  cursor: help;
+}
 .envs-table td.reward {
   font-family: var(--mono);
   font-weight: 600;

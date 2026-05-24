@@ -195,6 +195,8 @@ def list_envs() -> JSONResponse:
                 "repo_url": source.get("url"),
                 "tags": meta.get("tags") or [],
                 "novelty_score": meta.get("novelty_score"),
+                "runnable": meta.get("runnable"),
+                "runnable_error": meta.get("runnable_error"),
                 "n_traces": len(traces),
                 "latest_reward": latest.get("reward") if latest else None,
                 "latest_mode": latest.get("mode") if latest else None,
