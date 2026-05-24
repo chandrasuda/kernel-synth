@@ -379,10 +379,17 @@ def _rollout_agent(
                 finish_called = True
 
         usage = _usage_from_response(resp)
+        cost_usd = _estimate_cost_usd(
+            model=llm.model,
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
+            cached_tokens=usage.get("cached_tokens"),
+        )
         metrics = Metrics(
             prompt_tokens=usage.get("prompt_tokens"),
             completion_tokens=usage.get("completion_tokens"),
             cached_tokens=usage.get("cached_tokens"),
+            cost_usd=cost_usd,
             extra={"per_step_reward": 0.0},
         )
 
@@ -559,6 +566,74 @@ def _usage_from_response(resp: Any) -> dict[str, int | None]:
         "completion_tokens": int(ct) if ct is not None else None,
         "cached_tokens": int(cached) if cached is not None else None,
     }
+
+
+# (model substring, prompt $/1M tokens, completion $/1M tokens). First
+# substring match wins. Cached input tokens are billed at 10% of the
+# prompt rate (Anthropic/OpenAI both publish ~10x discount for cache
+# hits, so the precise factor doesn't matter for an estimate).
+_TOKEN_PRICES_PER_MTOK: tuple[tuple[str, float, float], ...] = (
+    ("claude-opus-4", 15.0, 75.0),
+    ("claude-sonnet-4-5", 3.0, 15.0),
+    ("claude-sonnet-4", 3.0, 15.0),
+    ("claude-haiku-4-5", 1.0, 5.0),
+    ("claude-haiku", 0.80, 4.0),
+    ("claude-sonnet", 3.0, 15.0),
+    ("claude-opus", 15.0, 75.0),
+    ("claude", 3.0, 15.0),
+    ("gpt-5-pro", 15.0, 60.0),
+    ("gpt-5-mini", 0.25, 2.0),
+    ("gpt-5", 1.25, 10.0),
+    ("gpt-4.1-mini", 0.40, 1.60),
+    ("gpt-4.1", 2.00, 8.00),
+    ("gpt-4o-mini", 0.15, 0.60),
+    ("gpt-4o", 2.50, 10.0),
+    ("o3-mini", 1.10, 4.40),
+)
+_CACHED_DISCOUNT = 0.10
+
+
+def _estimate_cost_usd(
+    *,
+    model: str | None,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+    cached_tokens: int | None,
+) -> float | None:
+    """Best-effort USD cost for one chat turn.
+
+    Returns ``None`` when the model is unrecognised or no token counts were
+    reported by the provider — we never want to bake a fictitious cost into
+    the trace. Cached tokens are subtracted from the prompt count so they
+    aren't double-billed at the full rate.
+    """
+    if not model:
+        return None
+    if prompt_tokens is None and completion_tokens is None:
+        return None
+    rates = _lookup_rates(model)
+    if rates is None:
+        return None
+    prompt_rate, completion_rate = rates
+    pt = int(prompt_tokens or 0)
+    ct = int(completion_tokens or 0)
+    cached = max(0, int(cached_tokens or 0))
+    cached = min(cached, pt)
+    billed_prompt = pt - cached
+    cost = (
+        billed_prompt * prompt_rate
+        + cached * prompt_rate * _CACHED_DISCOUNT
+        + ct * completion_rate
+    ) / 1_000_000.0
+    return round(float(cost), 6)
+
+
+def _lookup_rates(model: str) -> tuple[float, float] | None:
+    m = model.lower()
+    for prefix, p_rate, c_rate in _TOKEN_PRICES_PER_MTOK:
+        if prefix in m:
+            return p_rate, c_rate
+    return None
 
 
 __all__ = ["AgentRollout", "RolloutMode", "RolloutResult", "rollout"]
