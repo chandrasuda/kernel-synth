@@ -26,3 +26,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["kernel_synth"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"kernel_synth/static" = "kernel_synth/static"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "kernel_synth/**/*.py",
+    "kernel_synth/static/**",
+    "README.md",
+    "CHANGELOG.md",
+    "MANIFEST.in",
+    "pyproject.toml",
+]

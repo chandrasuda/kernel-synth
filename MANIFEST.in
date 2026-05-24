@@ -1,0 +1,13 @@
+include README.md
+include CHANGELOG.md
+include pyproject.toml
+recursive-include kernel_synth *.py
+recursive-include kernel_synth/static *
+prune envs
+prune data
+prune milestone
+prune .venv
+prune tests
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .DS_Store
