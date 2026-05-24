@@ -1213,6 +1213,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         torch.manual_seed(_seed)
         solution_mod_instance = solution_mod.build(**kwargs)
+        if solution_mod_instance is None:
+            raise TypeError(
+                "solution.build(**kwargs) returned None — it must return a "
+                "torch.nn.Module-like object (anything callable as module(*args, **kwargs))."
+            )
+        if not callable(solution_mod_instance):
+            raise TypeError(
+                "solution.build(**kwargs) returned a non-callable "
+                f"({{type(solution_mod_instance).__name__}}). It must be a torch.nn.Module "
+                "or another callable that produces the same output shape/dtype."
+            )
         if hasattr(solution_mod_instance, "to"):
             solution_mod_instance = solution_mod_instance.to(DEVICE, DTYPE)
         if hasattr(solution_mod_instance, "eval"):
