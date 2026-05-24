@@ -206,7 +206,9 @@ def write_index(records: Iterable[RepoRecord], envs_root: Path) -> Path:
     )
     (envs_root / "requirements-env.txt").write_text(requirements, encoding="utf-8")
 
-    (envs_root / ".gitignore").write_text("__pycache__/\n*.pyc\n", encoding="utf-8")
+    (envs_root / ".gitignore").write_text(
+        "__pycache__/\n*.pyc\n.torch_compile_cache/\n", encoding="utf-8"
+    )
     return envs_root / "README.md"
 
 
@@ -1247,6 +1249,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- torch.compile baseline (best-effort) ----
     if not args.check_only:
+        # Pin the Inductor cache to an env-local directory so successive
+        # benchmark.py invocations reuse the compiled artefact instead of
+        # paying the first-run codegen cost every time.
+        _cache_dir = Path(__file__).parent / ".torch_compile_cache"
+        _cache_dir.mkdir(exist_ok=True)
+        _os.environ.setdefault("TORCHINDUCTOR_CACHE_DIR", str(_cache_dir))
         try:
             torch.manual_seed(_seed)
             compile_target = reference.{class_name}(**kwargs).to(DEVICE, DTYPE).eval()
