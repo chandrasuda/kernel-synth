@@ -19,6 +19,7 @@ Every rollout terminates by writing
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import time
@@ -313,6 +314,11 @@ def _rollout_agent(
     llm_call_count = 0
     total_tool_calls = 0
     tool_cap_hit = False
+    # (name, args-hash) -> count. We never dispatch the same tool call
+    # twice; the second hit short-circuits and returns a deterministic
+    # "DEDUPED:" string instead so the model can self-correct rather than
+    # spinning on the same read_file call forever.
+    dedup_counts: dict[tuple[str, str], int] = {}
 
     for _turn in range(max_steps):
         try:
@@ -357,6 +363,30 @@ def _rollout_agent(
         tool_results_for_next: list[dict[str, Any]] = []
         finish_called = False
         for tc in resp.tool_calls:
+            key = _tool_call_signature(tc.name, tc.arguments or {})
+            prior = dedup_counts.get(key, 0)
+            dedup_counts[key] = prior + 1
+            if prior >= 1 and tc.name not in ("finish", "run_benchmark"):
+                # Same read_file / write_file / list_* call already issued
+                # this rollout — skip the actual dispatch and tell the
+                # model so it stops looping. We exempt run_benchmark
+                # (re-timing IS useful) and finish (always a terminal).
+                content_str = (
+                    f"DEDUPED: identical {tc.name!r} call already issued in "
+                    f"this rollout (count={dedup_counts[key]}). Try a "
+                    f"different action — re-run won't change the file."
+                )
+                results.append(
+                    ObservationResult(source_call_id=tc.id, content=content_str)
+                )
+                tool_results_for_next.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tc.id,
+                        "content": content_str,
+                    }
+                )
+                continue
             step_out = env.step(
                 {"name": tc.name, "arguments": tc.arguments or {}}
             )
@@ -555,6 +585,21 @@ def _safe_json(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+def _tool_call_signature(name: str, args: dict[str, Any]) -> tuple[str, str]:
+    """Stable ``(name, sha256-of-args)`` signature for dedup tracking.
+
+    We hash the canonical JSON-encoded arguments rather than the dict
+    itself so semantically identical calls with reordered keys collapse
+    to the same signature.
+    """
+    try:
+        encoded = json.dumps(args, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        encoded = repr(args)
+    digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    return (name, digest)
 
 
 def _usage_from_response(resp: Any) -> dict[str, int | None]:
