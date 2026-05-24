@@ -340,6 +340,16 @@ class KernelAgentTools:
 
         if not isinstance(content, str):
             raise ToolError("content must be a string")
+        # Refuse empty / whitespace-only writes. A no-op write almost always
+        # means the agent meant to send a real payload and the SDK dropped
+        # it; silently truncating solution.py to 0 bytes is the worst
+        # possible outcome. Use ``rm`` semantics elsewhere if you ever need
+        # to clear a file.
+        if not content.strip():
+            raise ToolError(
+                "refusing to write empty content; pass at least one "
+                "non-whitespace character"
+            )
         encoded = content.encode("utf-8")
         if len(encoded) > MAX_WRITE_BYTES:
             raise ToolError(
