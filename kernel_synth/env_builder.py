@@ -490,19 +490,29 @@ def _guess_forward_inputs(
 ) -> list[tuple[str, str]]:
     """Return [(name, generator_source)] for the forward call.
 
-    If ``class_source`` is provided and the class has an ``nn.Embedding``
-    that the forward consumes directly, the corresponding forward arg is
-    promoted to a Long-id generator regardless of its name. This is the
-    only reliable signal that a forward argument is a vocabulary index
-    rather than a hidden-state float tensor (which is `_generator_for`'s
-    name-pattern default).
+    If ``class_source`` is provided:
+      * a forward arg fed directly into ``nn.Embedding`` becomes a Long-id
+        generator regardless of its name;
+      * the first arg of a Conv2d-rooted class becomes an image tensor
+        (``[BATCH, in_channels, 32, 32]``);
+      * the first arg of a Conv1d-rooted class becomes a waveform tensor
+        (``[BATCH, in_channels, 16000]``).
+
+    These overrides only fire when our generic name-based inference would
+    otherwise hand back the default ``[BATCH, SEQ_LEN, HIDDEN]`` randn,
+    which is wrong for image/audio modules.
     """
     if sig is None:
         return [("x", "torch.randn(BATCH, SEQ_LEN, HIDDEN)")]
     embedding_args = (
         _embedding_consumer_args(class_source) if class_source else set()
     )
+    conv_kind, conv_in_channels = (
+        _first_conv_hint(class_source) if class_source else (None, None)
+    )
+
     out: list[tuple[str, str]] = []
+    first_index_emitted = False
     for name in sig.args:
         if name in sig.defaults:
             continue  # skip kwargs in the call by default
@@ -510,10 +520,79 @@ def _guess_forward_inputs(
             gen = "torch.randint(0, 1024, (BATCH, SEQ_LEN))"
         else:
             gen = _generator_for(name)
+            # Promote the first arg to an image/waveform tensor if the class
+            # is clearly an image/audio frontend and the name didn't match a
+            # more specific pattern (image / audio etc. already hit the
+            # right generator above and would short-circuit this branch).
+            if (
+                not first_index_emitted
+                and conv_kind is not None
+                and _is_default_hidden_gen(gen)
+            ):
+                if conv_kind == "conv2d":
+                    gen = (
+                        f"torch.randn(BATCH, {conv_in_channels}, 32, 32)"
+                    )
+                elif conv_kind == "conv1d":
+                    gen = (
+                        f"torch.randn(BATCH, {conv_in_channels}, 16000)"
+                    )
+        first_index_emitted = True
         out.append((name, gen))
     if not out:
         out.append(("x", "torch.randn(BATCH, SEQ_LEN, HIDDEN)"))
     return out
+
+
+def _is_default_hidden_gen(gen: str) -> bool:
+    return gen.startswith("torch.randn(BATCH, SEQ_LEN, HIDDEN)")
+
+
+def _first_conv_hint(class_source: str) -> tuple[str | None, int | None]:
+    """Return (``"conv1d"`` | ``"conv2d"`` | None, in_channels) for the first
+    ``Conv1d`` / ``Conv2d`` constructor we see in the class body.
+
+    We don't recurse into nested classes — only direct children of the
+    class node — so a transformer with a tiny conv hidden somewhere deep
+    doesn't get mis-classified as an image / audio frontend.
+    """
+    try:
+        tree = ast.parse(class_source)
+    except SyntaxError:
+        return None, None
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for sub in ast.walk(node):
+            if not isinstance(sub, ast.Call):
+                continue
+            fn = sub.func
+            name = None
+            if isinstance(fn, ast.Attribute):
+                name = fn.attr
+            elif isinstance(fn, ast.Name):
+                name = fn.id
+            if name not in {"Conv1d", "Conv2d"}:
+                continue
+            in_channels: int | None = None
+            if sub.args:
+                in_channels = _literal_int(sub.args[0])
+            for kw in sub.keywords or []:
+                if kw.arg == "in_channels":
+                    in_channels = _literal_int(kw.value)
+                    break
+            # Sensible default if the caller used a variable; pick 3 for
+            # Conv2d (RGB) and 1 for Conv1d (mono waveform).
+            if in_channels is None:
+                in_channels = 3 if name == "Conv2d" else 1
+            return ("conv2d" if name == "Conv2d" else "conv1d", in_channels)
+    return None, None
+
+
+def _literal_int(node: ast.AST) -> int | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, int):
+        return int(node.value)
+    return None
 
 
 def _embedding_consumer_args(class_source: str) -> set[str]:
