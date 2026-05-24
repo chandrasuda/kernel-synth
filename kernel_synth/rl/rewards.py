@@ -18,9 +18,38 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, TypedDict
 
 logger = logging.getLogger(__name__)
+
+
+class RewardComponents(TypedDict, total=False):
+    """Fully-attributed breakdown of a reward computation.
+
+    Every field that ``compute_reward`` may populate is enumerated here so
+    downstream consumers (the SPA, RL post-training) can type-check access
+    instead of stringly-typed dict lookups. Optional fields are ``None``
+    when the corresponding timing is missing or non-finite.
+    """
+
+    correct: bool
+    eager_ms: float | None
+    compile_ms: float | None
+    solution_ms: float | None
+    progress: float | None
+    eager_speedup: float | None
+    compile_ratio: float | None
+    wrong_penalty: float
+    progress_clip: list[float]
+    compile_denominator_degenerate: bool
+    benchmark: dict[str, Any]  # set by KernelEnv.finalize, not compute_reward
+
+
+class RewardResult(TypedDict):
+    """Return shape of :func:`compute_reward`."""
+
+    reward: float
+    components: RewardComponents
 
 
 WRONG_PENALTY = -0.1
@@ -63,7 +92,7 @@ def compute_reward(
     eager_ms: float | None,
     compile_ms: float | None,
     solution_ms: float | None,
-) -> dict[str, Any]:
+) -> RewardResult:
     """Compute the rollout reward + a fully-attributed components dict.
 
     Robustness:
@@ -135,7 +164,7 @@ def compute_reward(
     else:
         reward = max(PROGRESS_MIN, min(PROGRESS_MAX, progress))
 
-    components: dict[str, Any] = {
+    components: RewardComponents = {
         "correct": bool(correct),
         "eager_ms": eager,
         "compile_ms": compile_,
@@ -147,7 +176,15 @@ def compute_reward(
         "progress_clip": [PROGRESS_MIN, PROGRESS_MAX],
         "compile_denominator_degenerate": degenerate,
     }
-    return RewardBreakdown(reward=float(reward), components=components).to_dict()
+    return {"reward": float(reward), "components": components}
 
 
-__all__ = ["RewardBreakdown", "compute_reward", "WRONG_PENALTY", "PROGRESS_MIN", "PROGRESS_MAX"]
+__all__ = [
+    "RewardBreakdown",
+    "RewardComponents",
+    "RewardResult",
+    "compute_reward",
+    "WRONG_PENALTY",
+    "PROGRESS_MIN",
+    "PROGRESS_MAX",
+]

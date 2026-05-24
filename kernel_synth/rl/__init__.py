@@ -26,7 +26,7 @@ from .atif import (
 )
 from .env import KernelEnv, StepResult
 from .prompts import KERNEL_AGENT_SYSTEM_PROMPT, render_user_prompt
-from .rewards import RewardBreakdown, compute_reward
+from .rewards import RewardBreakdown, RewardComponents, RewardResult, compute_reward
 from .tools import KernelAgentTools, ToolError
 
 __all__ = [
@@ -41,6 +41,8 @@ __all__ = [
     "Observation",
     "ObservationResult",
     "RewardBreakdown",
+    "RewardComponents",
+    "RewardResult",
     "RolloutMode",
     "RolloutResult",
     "Step",
