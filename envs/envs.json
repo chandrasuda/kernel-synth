@@ -1,0 +1,507 @@
+{
+  "envs": [
+    {
+      "name": "lucidrains__audiolm-pytorch__Attend",
+      "class_name": "Attend",
+      "repo": "lucidrains/audiolm-pytorch",
+      "repo_url": "https://github.com/lucidrains/audiolm-pytorch",
+      "source_file": "audiolm_pytorch/attend.py",
+      "novelty_score": 0.99,
+      "tags": [
+        "einsum",
+        "imports:einops",
+        "self-contained",
+        "softmax",
+        "triu",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__audiolm-pytorch__CoarseTransformer",
+      "class_name": "CoarseTransformer",
+      "repo": "lucidrains/audiolm-pytorch",
+      "repo_url": "https://github.com/lucidrains/audiolm-pytorch",
+      "source_file": "audiolm_pytorch/audiolm_pytorch.py",
+      "novelty_score": 0.78,
+      "tags": [
+        "custom-init",
+        "einsum",
+        "imports:einops",
+        "looks-generic",
+        "math-heavy",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "lucidrains__audiolm-pytorch__FineTransformer",
+      "class_name": "FineTransformer",
+      "repo": "lucidrains/audiolm-pytorch",
+      "repo_url": "https://github.com/lucidrains/audiolm-pytorch",
+      "source_file": "audiolm_pytorch/audiolm_pytorch.py",
+      "novelty_score": 0.78,
+      "tags": [
+        "custom-init",
+        "einsum",
+        "imports:einops",
+        "looks-generic",
+        "math-heavy",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "lucidrains__audiolm-pytorch__SoundStream",
+      "class_name": "SoundStream",
+      "repo": "lucidrains/audiolm-pytorch",
+      "repo_url": "https://github.com/lucidrains/audiolm-pytorch",
+      "source_file": "audiolm_pytorch/soundstream.py",
+      "novelty_score": 0.75,
+      "tags": [
+        "imports:einops",
+        "math-heavy",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__audiolm-pytorch__HubertWithKmeans",
+      "class_name": "HubertWithKmeans",
+      "repo": "lucidrains/audiolm-pytorch",
+      "repo_url": "https://github.com/lucidrains/audiolm-pytorch",
+      "source_file": "audiolm_pytorch/hubert_kmeans.py",
+      "novelty_score": 0.75,
+      "tags": [
+        "imports:einops",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__audiolm-pytorch__RelativePositionBias",
+      "class_name": "RelativePositionBias",
+      "repo": "lucidrains/audiolm-pytorch",
+      "repo_url": "https://github.com/lucidrains/audiolm-pytorch",
+      "source_file": "audiolm_pytorch/audiolm_pytorch.py",
+      "novelty_score": 0.65,
+      "tags": [
+        "imports:einops",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "lucidrains__audiolm-pytorch__AudioLM",
+      "class_name": "AudioLM",
+      "repo": "lucidrains/audiolm-pytorch",
+      "repo_url": "https://github.com/lucidrains/audiolm-pytorch",
+      "source_file": "audiolm_pytorch/audiolm_pytorch.py",
+      "novelty_score": 0.65,
+      "tags": [
+        "imports:einops",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "lucidrains__audiolm-pytorch__MultiScaleDiscriminator",
+      "class_name": "MultiScaleDiscriminator",
+      "repo": "lucidrains/audiolm-pytorch",
+      "repo_url": "https://github.com/lucidrains/audiolm-pytorch",
+      "source_file": "audiolm_pytorch/soundstream.py",
+      "novelty_score": 0.65,
+      "tags": [
+        "imports:einops",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "lucidrains__vit-pytorch__DSSA",
+      "class_name": "DSSA",
+      "repo": "lucidrains/vit-pytorch",
+      "repo_url": "https://github.com/lucidrains/vit-pytorch",
+      "source_file": "vit_pytorch/sep_vit.py",
+      "novelty_score": 0.98,
+      "tags": [
+        "custom-init",
+        "einsum",
+        "imports:einops",
+        "math-heavy",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "lucidrains__vit-pytorch__NaViT",
+      "class_name": "NaViT",
+      "repo": "lucidrains/vit-pytorch",
+      "repo_url": "https://github.com/lucidrains/vit-pytorch",
+      "source_file": "vit_pytorch/na_vit.py",
+      "novelty_score": 0.98,
+      "tags": [
+        "custom-init",
+        "imports:einops",
+        "math-heavy",
+        "self-contained",
+        "topk"
+      ]
+    },
+    {
+      "name": "lucidrains__vit-pytorch__DistillWrapper",
+      "class_name": "DistillWrapper",
+      "repo": "lucidrains/vit-pytorch",
+      "repo_url": "https://github.com/lucidrains/vit-pytorch",
+      "source_file": "vit_pytorch/distill.py",
+      "novelty_score": 0.98,
+      "tags": [
+        "custom-init",
+        "imports:einops",
+        "math-heavy",
+        "self-contained",
+        "softmax"
+      ]
+    },
+    {
+      "name": "lucidrains__vit-pytorch__VAAT",
+      "class_name": "VAAT",
+      "repo": "lucidrains/vit-pytorch",
+      "repo_url": "https://github.com/lucidrains/vit-pytorch",
+      "source_file": "vit_pytorch/vaat.py",
+      "novelty_score": 0.9500000000000001,
+      "tags": [
+        "imports:einops",
+        "math-heavy",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__vit-pytorch__LookViT",
+      "class_name": "LookViT",
+      "repo": "lucidrains/vit-pytorch",
+      "repo_url": "https://github.com/lucidrains/vit-pytorch",
+      "source_file": "vit_pytorch/look_vit.py",
+      "novelty_score": 0.9,
+      "tags": [
+        "custom-init",
+        "imports:einops",
+        "math-heavy",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "lucidrains__vit-pytorch__NaViT",
+      "class_name": "NaViT",
+      "repo": "lucidrains/vit-pytorch",
+      "repo_url": "https://github.com/lucidrains/vit-pytorch",
+      "source_file": "vit_pytorch/na_vit_nested_tensor_3d.py",
+      "novelty_score": 0.88,
+      "tags": [
+        "custom-init",
+        "imports:einops",
+        "self-contained",
+        "topk"
+      ]
+    },
+    {
+      "name": "lucidrains__vit-pytorch__Adapter",
+      "class_name": "Adapter",
+      "repo": "lucidrains/vit-pytorch",
+      "repo_url": "https://github.com/lucidrains/vit-pytorch",
+      "source_file": "vit_pytorch/learnable_memory_vit.py",
+      "novelty_score": 0.85,
+      "tags": [
+        "custom-init",
+        "imports:einops",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__vit-pytorch__ViT",
+      "class_name": "ViT",
+      "repo": "lucidrains/vit-pytorch",
+      "repo_url": "https://github.com/lucidrains/vit-pytorch",
+      "source_file": "vit_pytorch/vit_with_decorr.py",
+      "novelty_score": 0.85,
+      "tags": [
+        "custom-init",
+        "imports:einops",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__x-transformers__CoPE",
+      "class_name": "CoPE",
+      "repo": "lucidrains/x-transformers",
+      "repo_url": "https://github.com/lucidrains/x-transformers",
+      "source_file": "x_transformers/x_transformers.py",
+      "novelty_score": 1.0,
+      "tags": [
+        "cumsum",
+        "einsum",
+        "gather",
+        "imports:einops",
+        "math-heavy",
+        "self-contained",
+        "softmax",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__x-transformers__DataDependentAlibi",
+      "class_name": "DataDependentAlibi",
+      "repo": "lucidrains/x-transformers",
+      "repo_url": "https://github.com/lucidrains/x-transformers",
+      "source_file": "x_transformers/x_transformers.py",
+      "novelty_score": 1.0,
+      "tags": [
+        "creative-name",
+        "cumsum",
+        "imports:einops",
+        "self-contained",
+        "tril",
+        "triu"
+      ]
+    },
+    {
+      "name": "lucidrains__x-transformers__PerRowDataDependentAlibi",
+      "class_name": "PerRowDataDependentAlibi",
+      "repo": "lucidrains/x-transformers",
+      "repo_url": "https://github.com/lucidrains/x-transformers",
+      "source_file": "x_transformers/x_transformers.py",
+      "novelty_score": 1.0,
+      "tags": [
+        "creative-name",
+        "cumsum",
+        "einsum",
+        "imports:einops",
+        "self-contained",
+        "triu"
+      ]
+    },
+    {
+      "name": "lucidrains__x-transformers__AlibiPositionalBias",
+      "class_name": "AlibiPositionalBias",
+      "repo": "lucidrains/x-transformers",
+      "repo_url": "https://github.com/lucidrains/x-transformers",
+      "source_file": "x_transformers/x_transformers.py",
+      "novelty_score": 1.0,
+      "tags": [
+        "creative-name",
+        "imports:einops",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__x-transformers__BinaryMapper",
+      "class_name": "BinaryMapper",
+      "repo": "lucidrains/x-transformers",
+      "repo_url": "https://github.com/lucidrains/x-transformers",
+      "source_file": "x_transformers/free_transformer.py",
+      "novelty_score": 0.98,
+      "tags": [
+        "einsum",
+        "imports:einops",
+        "math-heavy",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__x-transformers__BeliefStateWrapper",
+      "class_name": "BeliefStateWrapper",
+      "repo": "lucidrains/x-transformers",
+      "repo_url": "https://github.com/lucidrains/x-transformers",
+      "source_file": "x_transformers/belief_state_wrapper.py",
+      "novelty_score": 0.9,
+      "tags": [
+        "imports:einops",
+        "math-heavy",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__x-transformers__AutoregressiveWrapper",
+      "class_name": "AutoregressiveWrapper",
+      "repo": "lucidrains/x-transformers",
+      "repo_url": "https://github.com/lucidrains/x-transformers",
+      "source_file": "x_transformers/autoregressive_wrapper.py",
+      "novelty_score": 0.89,
+      "tags": [
+        "cumsum",
+        "imports:einops",
+        "math-heavy",
+        "scatter",
+        "topk"
+      ]
+    },
+    {
+      "name": "lucidrains__x-transformers__HyperConnection",
+      "class_name": "HyperConnection",
+      "repo": "lucidrains/x-transformers",
+      "repo_url": "https://github.com/lucidrains/x-transformers",
+      "source_file": "x_transformers/x_transformers.py",
+      "novelty_score": 0.88,
+      "tags": [
+        "custom-init",
+        "einsum",
+        "imports:einops",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "openai__whisper__Whisper",
+      "class_name": "Whisper",
+      "repo": "openai/whisper",
+      "repo_url": "https://github.com/openai/whisper",
+      "source_file": "whisper/model.py",
+      "novelty_score": 0.35,
+      "tags": [
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "openai__whisper__AudioEncoder",
+      "class_name": "AudioEncoder",
+      "repo": "openai/whisper",
+      "repo_url": "https://github.com/openai/whisper",
+      "source_file": "whisper/model.py",
+      "novelty_score": 0.18,
+      "tags": [
+        "gelu",
+        "looks-generic",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "openai__whisper__TextDecoder",
+      "class_name": "TextDecoder",
+      "repo": "openai/whisper",
+      "repo_url": "https://github.com/openai/whisper",
+      "source_file": "whisper/model.py",
+      "novelty_score": 0.1,
+      "tags": [
+        "looks-generic",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "state-spaces__mamba__Mamba2",
+      "class_name": "Mamba2",
+      "repo": "state-spaces/mamba",
+      "repo_url": "https://github.com/state-spaces/mamba",
+      "source_file": "mamba_ssm/modules/mamba2.py",
+      "novelty_score": 1.0,
+      "tags": [
+        "creative-name",
+        "imports:causal_conv1d",
+        "imports:einops",
+        "imports:mamba_ssm",
+        "math-heavy",
+        "self-contained",
+        "silu"
+      ]
+    },
+    {
+      "name": "state-spaces__mamba__MHA",
+      "class_name": "MHA",
+      "repo": "state-spaces/mamba",
+      "repo_url": "https://github.com/state-spaces/mamba",
+      "source_file": "mamba_ssm/modules/mha.py",
+      "novelty_score": 0.9600000000000001,
+      "tags": [
+        "imports:causal_conv1d",
+        "imports:einops",
+        "imports:flash_attn",
+        "math-heavy",
+        "roll",
+        "self-contained",
+        "silu"
+      ]
+    },
+    {
+      "name": "state-spaces__mamba__Mamba2Simple",
+      "class_name": "Mamba2Simple",
+      "repo": "state-spaces/mamba",
+      "repo_url": "https://github.com/state-spaces/mamba",
+      "source_file": "mamba_ssm/modules/mamba2_simple.py",
+      "novelty_score": 0.9500000000000001,
+      "tags": [
+        "creative-name",
+        "imports:causal_conv1d",
+        "imports:einops",
+        "imports:mamba_ssm",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "state-spaces__mamba__MambaLMHeadModel",
+      "class_name": "MambaLMHeadModel",
+      "repo": "state-spaces/mamba",
+      "repo_url": "https://github.com/state-spaces/mamba",
+      "source_file": "mamba_ssm/models/mixer_seq_simple.py",
+      "novelty_score": 0.9,
+      "tags": [
+        "creative-name",
+        "imports:mamba_ssm",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "state-spaces__mamba__Mamba",
+      "class_name": "Mamba",
+      "repo": "state-spaces/mamba",
+      "repo_url": "https://github.com/state-spaces/mamba",
+      "source_file": "mamba_ssm/modules/mamba_simple.py",
+      "novelty_score": 0.9,
+      "tags": [
+        "creative-name",
+        "imports:causal_conv1d",
+        "imports:einops",
+        "imports:mamba_ssm",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "state-spaces__mamba__Mamba3",
+      "class_name": "Mamba3",
+      "repo": "state-spaces/mamba",
+      "repo_url": "https://github.com/state-spaces/mamba",
+      "source_file": "mamba_ssm/modules/mamba3.py",
+      "novelty_score": 0.8800000000000001,
+      "tags": [
+        "creative-name",
+        "einsum",
+        "imports:einops",
+        "imports:mamba_ssm"
+      ]
+    },
+    {
+      "name": "state-spaces__mamba__MixerModel",
+      "class_name": "MixerModel",
+      "repo": "state-spaces/mamba",
+      "repo_url": "https://github.com/state-spaces/mamba",
+      "source_file": "mamba_ssm/models/mixer_seq_simple.py",
+      "novelty_score": 0.65,
+      "tags": [
+        "imports:mamba_ssm",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "state-spaces__mamba__ParallelEmbeddings",
+      "class_name": "ParallelEmbeddings",
+      "repo": "state-spaces/mamba",
+      "repo_url": "https://github.com/state-spaces/mamba",
+      "source_file": "mamba_ssm/distributed/tensor_parallel.py",
+      "novelty_score": 0.4,
+      "tags": [
+        "imports:einops",
+        "imports:mamba_ssm",
+        "looks-generic",
+        "self-contained"
+      ]
+    }
+  ]
+}

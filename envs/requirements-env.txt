@@ -1,0 +1,6 @@
+# Generic deps for running any kernel-synth env harness.
+# Source-repo-specific deps (e.g. mamba_ssm, causal_conv1d) need to be
+# installed manually for envs that import them.
+torch>=2.1
+einops>=0.7
+numpy>=1.24

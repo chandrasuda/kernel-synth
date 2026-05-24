@@ -1,0 +1,56 @@
+{
+  "url": "https://github.com/openai/whisper",
+  "name": "openai/whisper",
+  "local_path": "/Users/csuda/kernel-synth/data/clones/openai/whisper",
+  "commit_sha": "04f449b8a437f1bbd3dba5c9f826aca972e7709a",
+  "cloned_at": "2026-05-24T01:38:22.749527Z",
+  "n_python_files": 14,
+  "n_loc": 3980,
+  "selection_mode": "heuristic",
+  "candidates": [
+    {
+      "file_path": "whisper/model.py",
+      "class_name": "Whisper",
+      "start_line": 252,
+      "end_line": 345,
+      "reason": "Custom nn.Module 'Whisper' with non-trivial body.",
+      "novelty_score": 0.35,
+      "tags": [
+        "self-contained",
+        "uses-buffers"
+      ],
+      "source_code": "class Whisper(nn.Module):\n    def __init__(self, dims: ModelDimensions):\n        super().__init__()\n        self.dims = dims\n        self.encoder = AudioEncoder(\n            self.dims.n_mels,\n            self.dims.n_audio_ctx,\n            self.dims.n_audio_state,\n            self.dims.n_audio_head,\n            self.dims.n_audio_layer,\n        )\n        self.decoder = TextDecoder(\n            self.dims.n_vocab,\n            self.dims.n_text_ctx,\n            self.dims.n_text_state,\n            self.dims.n_text_head,\n            self.dims.n_text_layer,\n        )\n        # use the last half among the decoder layers for time alignment by default;\n        # to use a specific set of heads, see `set_alignment_heads()` below.\n        all_heads = torch.zeros(\n            self.dims.n_text_layer, self.dims.n_text_head, dtype=torch.bool\n        )\n        all_heads[self.dims.n_text_layer // 2 :] = True\n        self.register_buffer(\"alignment_heads\", all_heads.to_sparse(), persistent=False)\n\n    def set_alignment_heads(self, dump: bytes):\n        array = np.frombuffer(\n            gzip.decompress(base64.b85decode(dump)), dtype=bool\n        ).copy()\n        mask = torch.from_numpy(array).reshape(\n            self.dims.n_text_layer, self.dims.n_text_head\n        )\n        self.register_buffer(\"alignment_heads\", mask.to_sparse(), persistent=False)\n\n    def embed_audio(self, mel: torch.Tensor):\n        return self.encoder(mel)\n\n    def logits(self, tokens: torch.Tensor, audio_features: torch.Tensor):\n        return self.decoder(tokens, audio_features)\n\n    def forward(\n        self, mel: torch.Tensor, tokens: torch.Tensor\n    ) -> Dict[str, torch.Tensor]:\n        return self.decoder(tokens, self.encoder(mel))\n\n    @property\n    def device(self):\n        return next(self.parameters()).device\n\n    @property\n    def is_multilingual(self):\n        return self.dims.n_vocab >= 51865\n\n    @property\n    def num_languages(self):\n        return self.dims.n_vocab - 51765 - int(self.is_multilingual)\n\n    def install_kv_cache_hooks(self, cache: Optional[dict] = None):\n        \"\"\"\n        The `MultiHeadAttention` module optionally accepts `kv_cache` which stores the key and value\n        tensors calculated for the previous positions. This method returns a dictionary that stores\n        all caches, and the necessary hooks for the key and value projection modules that save the\n        intermediate tensors to be reused during later calculations.\n\n        Returns\n        -------\n        cache : Dict[nn.Module, torch.Tensor]\n            A dictionary object mapping the key/value projection modules to its cache\n        hooks : List[RemovableHandle]\n            List of PyTorch RemovableHandle objects to stop the hooks to be called\n        \"\"\"\n        cache = {**cache} if cache is not None else {}\n        hooks = []\n\n        def save_to_cache(module, _, output):\n            if module not in cache or output.shape[1] > self.dims.n_text_ctx:\n                # save as-is, for the first token or cross attention\n                cache[module] = output\n            else:\n                cache[module] = torch.cat([cache[module], output], dim=1).detach()\n            return cache[module]\n\n        def install_hooks(layer: nn.Module):\n            if isinstance(layer, MultiHeadAttention):\n                hooks.append(layer.key.register_forward_hook(save_to_cache))\n                hooks.append(layer.value.register_forward_hook(save_to_cache))\n\n        self.decoder.apply(install_hooks)\n        return cache, hooks\n\n    detect_language = detect_language_function\n    transcribe = transcribe_function\n    decode = decode_function"
+    },
+    {
+      "file_path": "whisper/model.py",
+      "class_name": "AudioEncoder",
+      "start_line": 174,
+      "end_line": 204,
+      "reason": "forward uses gelu",
+      "novelty_score": 0.18,
+      "tags": [
+        "gelu",
+        "looks-generic",
+        "self-contained",
+        "uses-buffers"
+      ],
+      "source_code": "class AudioEncoder(nn.Module):\n    def __init__(\n        self, n_mels: int, n_ctx: int, n_state: int, n_head: int, n_layer: int\n    ):\n        super().__init__()\n        self.conv1 = Conv1d(n_mels, n_state, kernel_size=3, padding=1)\n        self.conv2 = Conv1d(n_state, n_state, kernel_size=3, stride=2, padding=1)\n        self.register_buffer(\"positional_embedding\", sinusoids(n_ctx, n_state))\n\n        self.blocks: Iterable[ResidualAttentionBlock] = nn.ModuleList(\n            [ResidualAttentionBlock(n_state, n_head) for _ in range(n_layer)]\n        )\n        self.ln_post = LayerNorm(n_state)\n\n    def forward(self, x: Tensor):\n        \"\"\"\n        x : torch.Tensor, shape = (batch_size, n_mels, n_ctx)\n            the mel spectrogram of the audio\n        \"\"\"\n        x = F.gelu(self.conv1(x))\n        x = F.gelu(self.conv2(x))\n        x = x.permute(0, 2, 1)\n\n        assert x.shape[1:] == self.positional_embedding.shape, \"incorrect audio shape\"\n        x = (x + self.positional_embedding).to(x.dtype)\n\n        for block in self.blocks:\n            x = block(x)\n\n        x = self.ln_post(x)\n        return x"
+    },
+    {
+      "file_path": "whisper/model.py",
+      "class_name": "TextDecoder",
+      "start_line": 207,
+      "end_line": 249,
+      "reason": "Custom nn.Module 'TextDecoder' with non-trivial body.",
+      "novelty_score": 0.1,
+      "tags": [
+        "looks-generic",
+        "self-contained",
+        "uses-buffers"
+      ],
+      "source_code": "class TextDecoder(nn.Module):\n    def __init__(\n        self, n_vocab: int, n_ctx: int, n_state: int, n_head: int, n_layer: int\n    ):\n        super().__init__()\n\n        self.token_embedding = nn.Embedding(n_vocab, n_state)\n        self.positional_embedding = nn.Parameter(torch.empty(n_ctx, n_state))\n\n        self.blocks: Iterable[ResidualAttentionBlock] = nn.ModuleList(\n            [\n                ResidualAttentionBlock(n_state, n_head, cross_attention=True)\n                for _ in range(n_layer)\n            ]\n        )\n        self.ln = LayerNorm(n_state)\n\n        mask = torch.empty(n_ctx, n_ctx).fill_(-np.inf).triu_(1)\n        self.register_buffer(\"mask\", mask, persistent=False)\n\n    def forward(self, x: Tensor, xa: Tensor, kv_cache: Optional[dict] = None):\n        \"\"\"\n        x : torch.LongTensor, shape = (batch_size, <= n_ctx)\n            the text tokens\n        xa : torch.Tensor, shape = (batch_size, n_audio_ctx, n_audio_state)\n            the encoded audio features to be attended on\n        \"\"\"\n        offset = next(iter(kv_cache.values())).shape[1] if kv_cache else 0\n        x = (\n            self.token_embedding(x)\n            + self.positional_embedding[offset : offset + x.shape[-1]]\n        )\n        x = x.to(xa.dtype)\n\n        for block in self.blocks:\n            x = block(x, xa, mask=self.mask, kv_cache=kv_cache)\n\n        x = self.ln(x)\n        logits = (\n            x @ torch.transpose(self.token_embedding.weight.to(x.dtype), 0, 1)\n        ).float()\n\n        return logits"
+    }
+  ],
+  "agent_log": [],
+  "notes": "no LLM available (No LLM provider available. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.); used heuristic"
+}

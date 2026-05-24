@@ -1,0 +1,67 @@
+# Extracted by kernel-synth
+# Source: x_transformers/x_transformers.py (lines 469-528)
+# Class: CoPE
+# Tags: cumsum, einsum, gather, imports:einops, math-heavy, self-contained, softmax, uses-buffers
+# Novelty: 1.00
+# Reason: forward uses cumsum, einsum, gather, softmax; ~9 arithmetic ops in forward; file imports einops, einops, einops, einops, einops, einops, einops, einops
+
+class CoPE(Module):
+    """
+    Appendix B of https://arxiv.org/abs/2405.18719
+    """
+    def __init__ (
+        self,
+        dim,
+        heads,
+        max_pos,
+        soft_onehot = False,
+        talking_heads = False,
+        soft_onehot_temp = 5e-2
+    ):
+        super () . __init__ ()
+        self.max_pos = max_pos
+        self.pos_emb = nn.Parameter(torch.zeros(max_pos, dim))
+
+        self.talking_heads = nn.Conv2d(heads, heads, 1, bias = False) if talking_heads else None
+        self.soft_onehot = soft_onehot
+        self.soft_onehot_temp = soft_onehot_temp
+
+        if not soft_onehot:
+            return
+
+        self.register_buffer('positions', arange(max_pos))
+
+    def forward(self, query, attn_logits):
+
+        if exists(self.talking_heads):
+            i, j = attn_logits.shape[-2:]
+            causal_mask = attn_logits.new_ones(i, j).triu_(j - i + 1).bool()
+
+            attn_logits = self.talking_heads(attn_logits)
+
+            attn_logits = attn_logits.masked_fill(causal_mask, -torch.finfo(attn_logits.dtype).max)
+
+        # compute positions
+
+        gates = attn_logits.sigmoid()
+
+        pos = gates.flip(-1).cumsum(dim = -1).flip(-1)
+        pos = pos.clamp(max = self.max_pos - 1)
+
+        logits_int = einsum('b h n d, p d -> b h n p', query, self.pos_emb)
+
+        if self.soft_onehot:
+            diff_pos = einx.subtract('i, j -> i j', pos, self.positions).abs()
+            soft_onehot_pos = F.softmax(-diff_pos / self.soft_onehot_temp, dim = -1)
+            cope_pos_emb = einsum('b h i j p, b h i p -> b h i j', soft_onehot_pos, logits_int)
+        else:
+            # interpolate from integer positions
+            pos_ceil = pos.ceil().long()
+            pos_floor = pos.floor().long()
+            logits_ceil = logits_int.gather(-1, pos_ceil)
+            logits_floor = logits_int.gather(-1, pos_floor)
+
+            w = pos - pos_floor
+            cope_pos_emb = logits_ceil * w + logits_floor * (1 - w)
+
+        return cope_pos_emb
