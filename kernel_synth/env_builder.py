@@ -970,7 +970,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import torch  # noqa: E402
 
-WARMUP_RUNS = 3
+DEFAULT_WARMUP_RUNS = 3
 
 
 def _sync():
@@ -990,10 +990,10 @@ def _to(obj, device, dtype):
     return obj
 
 
-def _time(module, args, kwargs, runs: int) -> tuple[object, float]:
+def _time(module, args, kwargs, runs: int, warmup: int) -> tuple[object, float]:
     """Warm + time. Returns (last output, avg ms per run)."""
     with torch.no_grad():
-        for _ in range(WARMUP_RUNS):
+        for _ in range(max(0, int(warmup))):
             out = module(*args, **kwargs)
     _sync()
     t0 = time.perf_counter()
@@ -1029,6 +1029,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--runs", type=int, default=20)
     parser.add_argument(
+        "--warmup",
+        type=int,
+        default=DEFAULT_WARMUP_RUNS,
+        help=(
+            "Untimed warmup iterations before each timing loop. "
+            "Bump on CUDA when the first kernel launch dominates the timing."
+        ),
+    )
+    parser.add_argument(
         "--check-only",
         action="store_true",
         help="Skip timing — only verify correctness against eager.",
@@ -1041,6 +1050,7 @@ def main(argv: list[str] | None = None) -> int:
     result: dict = {{
         "module": "{class_name}",
         "runs": args.runs,
+        "warmup": args.warmup,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "dtype": "torch.float32",
         "eager_ms": None,
@@ -1128,7 +1138,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- Reference forward + timing ----
     try:
-        eager_out, eager_ms = _time(eager_mod, fwd_args, fwd_kwargs, args.runs)
+        eager_out, eager_ms = _time(
+            eager_mod, fwd_args, fwd_kwargs, args.runs, args.warmup
+        )
         result["eager_ms"] = eager_ms
     except Exception as e:
         result["error"] = "eager_forward_failed"
@@ -1148,7 +1160,9 @@ def main(argv: list[str] | None = None) -> int:
                 dynamic=True,
                 fullgraph=False,
             )
-            _, compile_ms = _time(compiled_mod, fwd_args, fwd_kwargs, args.runs)
+            _, compile_ms = _time(
+                compiled_mod, fwd_args, fwd_kwargs, args.runs, args.warmup
+            )
             result["compile_ms"] = compile_ms
         except Exception as e:
             result["compile_ms"] = None
@@ -1161,7 +1175,7 @@ def main(argv: list[str] | None = None) -> int:
                 sol_out = solution_mod_instance(*fwd_args, **fwd_kwargs)
         else:
             sol_out, sol_ms = _time(
-                solution_mod_instance, fwd_args, fwd_kwargs, args.runs
+                solution_mod_instance, fwd_args, fwd_kwargs, args.runs, args.warmup
             )
             result["solution_ms"] = sol_ms
     except Exception as e:
