@@ -1038,11 +1038,32 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--device",
+        choices=("cpu", "cuda", "auto"),
+        default="auto",
+        help=(
+            "Run on cpu / cuda explicitly, or auto (default: cuda if "
+            "available else cpu). Overrides inputs.DEVICE."
+        ),
+    )
+    parser.add_argument(
         "--check-only",
         action="store_true",
         help="Skip timing — only verify correctness against eager.",
     )
     args = parser.parse_args(argv)
+    if args.device == "auto":
+        active_device = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        if args.device == "cuda" and not torch.cuda.is_available():
+            print(
+                json.dumps(
+                    {{"error": "cuda_unavailable", "device": "cuda"}},
+                    indent=2,
+                )
+            )
+            return 9
+        active_device = args.device
 
     import os as _os
     torch.manual_seed(int(_os.environ.get("KERNEL_SYNTH_SEED", "0")))
@@ -1051,7 +1072,7 @@ def main(argv: list[str] | None = None) -> int:
         "module": "{class_name}",
         "runs": args.runs,
         "warmup": args.warmup,
-        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "device": active_device,
         "dtype": "torch.float32",
         "eager_ms": None,
         "compile_ms": None,
@@ -1077,6 +1098,10 @@ def main(argv: list[str] | None = None) -> int:
         result["traceback"] = traceback.format_exc(limit=4)
         _emit(result, args.json)
         return 2
+
+    # The --device flag overrides whatever inputs.DEVICE picked at import
+    # time so a single benchmark.py invocation is honest about where it ran.
+    DEVICE = active_device
 
     try:
         kwargs = build_module_kwargs()
