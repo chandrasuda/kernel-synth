@@ -159,6 +159,27 @@ class KernelAgentTools:
             },
         },
         {
+            "name": "list_traces",
+            "description": (
+                "List prior rollout trace files for this env, newest first. "
+                "Each row carries the trace name, mode (baseline/torch_compile/"
+                "agent), reward, and step count so you can quickly check what "
+                "earlier runs achieved before re-treading the same ground."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 50,
+                        "description": "Maximum traces to return (default 10).",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "finish",
             "description": (
                 "Terminate the rollout. Optionally include a short summary."
@@ -214,6 +235,9 @@ class KernelAgentTools:
             if name == "run_benchmark":
                 runs = int(args.get("runs", 10)) if args.get("runs") is not None else 10
                 return self.run_benchmark(runs=runs)
+            if name == "list_traces":
+                limit = _opt_int(args.get("limit")) or 10
+                return self.list_traces(limit=limit)
             if name == "finish":
                 return self.finish(notes=str(args.get("notes", "")))
         except ToolError as e:
@@ -344,6 +368,29 @@ class KernelAgentTools:
                 parsed.setdefault("stderr_tail", stderr_tail)
         return parsed
 
+    def list_traces(self, *, limit: int = 10) -> str:
+        """Peek at prior rollouts in this env's traces/ folder, newest first."""
+        traces_dir = self.env_dir / "traces"
+        if not traces_dir.is_dir():
+            return "(no traces yet)"
+        files = sorted(
+            traces_dir.glob("*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if not files:
+            return "(no traces yet)"
+        limit = max(1, min(int(limit), 50))
+        rows: list[str] = [f"{len(files)} trace(s); showing newest {min(limit, len(files))}:"]
+        for p in files[:limit]:
+            mode, reward, n_steps = _peek_trace(p)
+            reward_s = f"{reward:.3f}" if isinstance(reward, (int, float)) else "—"
+            rows.append(
+                f"  {p.name}  mode={mode or '?'}  reward={reward_s}"
+                f"  steps={n_steps if n_steps is not None else '?'}"
+            )
+        return "\n".join(rows)
+
     def finish(self, notes: str = "") -> str:
         self.finished = True
         self.finish_notes = notes or ""
@@ -386,6 +433,29 @@ def _opt_int(v: Any) -> int | None:
         return int(v)
     except (TypeError, ValueError):
         return None
+
+
+def _peek_trace(path: Path) -> tuple[str | None, float | None, int | None]:
+    """Cheap (mode, reward, n_steps) sniff so list_traces stays snappy."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, None, None
+    extra = data.get("extra") or {}
+    fm = data.get("final_metrics") or {}
+    fm_extra = fm.get("extra") or {} if isinstance(fm, dict) else {}
+    mode = fm_extra.get("mode") or extra.get("mode")
+    reward = fm_extra.get("reward")
+    if reward is None:
+        for step in reversed(data.get("steps") or []):
+            if step.get("source") == "agent":
+                m = (step.get("metrics") or {}).get("extra") or {}
+                if "reward" in m:
+                    reward = m["reward"]
+                break
+    steps = data.get("steps") or []
+    n_steps = len(steps) if isinstance(steps, list) else None
+    return mode, reward, n_steps
 
 
 def _last_json_object(text: str) -> str | None:
