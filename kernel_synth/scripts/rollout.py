@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import cast
@@ -67,6 +68,16 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional model label override (agent mode).",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help=(
+            "Seed for torch.manual_seed inside this process and the benchmark "
+            "subprocess (via KERNEL_SYNTH_SEED). Defaults to 0 inside the "
+            "harness."
+        ),
+    )
     args = parser.parse_args(argv)
 
     envs_root = Path(args.envs_root).resolve()
@@ -90,6 +101,19 @@ def main(argv: list[str] | None = None) -> int:
             border_style="magenta",
         )
     )
+
+    if args.seed is not None:
+        # Seed our own process for any in-process Python randomness, and
+        # propagate so the benchmark subprocess (which re-imports torch and
+        # builds the module) picks the same seed via inputs.py / benchmark.py.
+        try:
+            import torch
+
+            torch.manual_seed(int(args.seed))
+        except Exception:  # noqa: BLE001
+            pass
+        os.environ["KERNEL_SYNTH_SEED"] = str(int(args.seed))
+        console.print(f"[dim]seed:[/dim] [magenta]{args.seed}[/magenta]")
 
     llm = None
     if args.mode == "agent":

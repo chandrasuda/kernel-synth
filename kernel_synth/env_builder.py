@@ -795,7 +795,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    torch.manual_seed(0)
+    import os as _os
+    torch.manual_seed(int(_os.environ.get("KERNEL_SYNTH_SEED", "0")))
 
     result: dict = {{
         "module": "{class_name}",
@@ -839,8 +840,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- Build eager reference (seed before every constructor so all three
     # modules share the same random weights) ----
+    _seed = int(_os.environ.get("KERNEL_SYNTH_SEED", "0"))
     try:
-        torch.manual_seed(0)
+        torch.manual_seed(_seed)
         eager_mod = reference.{class_name}(**kwargs).to(DEVICE, DTYPE)
         eager_mod.eval()
     except Exception as e:
@@ -862,7 +864,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- Build solution ----
     try:
-        torch.manual_seed(0)
+        torch.manual_seed(_seed)
         solution_mod_instance = solution_mod.build(**kwargs)
         if hasattr(solution_mod_instance, "to"):
             solution_mod_instance = solution_mod_instance.to(DEVICE, DTYPE)
@@ -898,7 +900,7 @@ def main(argv: list[str] | None = None) -> int:
     # ---- torch.compile baseline (best-effort) ----
     if not args.check_only:
         try:
-            torch.manual_seed(0)
+            torch.manual_seed(_seed)
             compile_target = reference.{class_name}(**kwargs).to(DEVICE, DTYPE).eval()
             compile_target.load_state_dict(eager_mod.state_dict(), strict=False)
             compiled_mod = torch.compile(
