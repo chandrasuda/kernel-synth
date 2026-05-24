@@ -1058,9 +1058,26 @@ def _allclose(a, b, rtol=None, atol=None):
 
 
 def main(argv: list[str] | None = None) -> int:
+    import os as _os
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
-    parser.add_argument("--runs", type=int, default=20)
+    _default_runs = 20
+    try:
+        _env_runs = int(_os.environ.get("KERNEL_SYNTH_BENCHMARK_RUNS", ""))
+        if _env_runs > 0:
+            _default_runs = _env_runs
+    except (TypeError, ValueError):
+        pass
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=_default_runs,
+        help=(
+            "Timing samples per module (default 20, overridden by "
+            "KERNEL_SYNTH_BENCHMARK_RUNS env var)."
+        ),
+    )
     parser.add_argument(
         "--warmup",
         type=int,
@@ -1122,7 +1139,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         active_dtype = torch.float32
 
-    import os as _os
     torch.manual_seed(int(_os.environ.get("KERNEL_SYNTH_SEED", "0")))
 
     result: dict = {{
