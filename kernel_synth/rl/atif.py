@@ -184,6 +184,51 @@ class Trajectory(BaseModel):
     def to_json_dict(self, *, exclude_none: bool = True) -> dict[str, Any]:
         return self.model_dump(mode="json", exclude_none=exclude_none)
 
+    def summary(self) -> dict[str, Any]:
+        """Return a cheap (n_steps, n_tool_calls, total_tokens, final_reward) view.
+
+        Designed for CLI / dashboard display where you want a one-line
+        snapshot of a trajectory without re-walking every step downstream.
+        """
+        n_tool_calls = 0
+        total_tokens = 0
+        any_tokens = False
+        for s in self.steps:
+            if s.tool_calls:
+                n_tool_calls += len(s.tool_calls)
+            m = s.metrics
+            if m is None:
+                continue
+            if m.prompt_tokens is not None:
+                total_tokens += int(m.prompt_tokens)
+                any_tokens = True
+            if m.completion_tokens is not None:
+                total_tokens += int(m.completion_tokens)
+                any_tokens = True
+
+        final_reward: float | None = None
+        fm = self.final_metrics
+        if fm is not None and fm.extra:
+            r = fm.extra.get("reward")
+            if isinstance(r, (int, float)):
+                final_reward = float(r)
+        if final_reward is None:
+            for s in reversed(self.steps):
+                m = s.metrics
+                if m is None or not m.extra:
+                    continue
+                r = m.extra.get("reward")
+                if isinstance(r, (int, float)):
+                    final_reward = float(r)
+                    break
+
+        return {
+            "n_steps": len(self.steps),
+            "n_tool_calls": n_tool_calls,
+            "total_tokens": total_tokens if any_tokens else None,
+            "final_reward": final_reward,
+        }
+
 
 Trajectory.model_rebuild()  # support self-referential subagent_trajectories
 
