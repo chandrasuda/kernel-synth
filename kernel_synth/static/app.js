@@ -291,6 +291,7 @@
 
   function moduleCard(c) {
     const nov = Math.round(c.novelty_score * 100);
+    const band = noveltyBand(c.novelty_score);
     // We build the absolute path on the server side when possible (via the
     // record's local_path), but the module list endpoint only ships the
     // repo-relative ``file_path``. Copying that is still useful — the agent
@@ -312,7 +313,7 @@
           </div>
           <div class="novelty">
             <div class="value">${c.novelty_score.toFixed(2)}</div>
-            <div class="novelty-bar"><span style="width:${nov}%"></span></div>
+            <div class="novelty-bar"><span class="${band}" style="width:${nov}%"></span></div>
           </div>
         </div>
         <p class="reason">${escape(c.reason)}</p>
@@ -559,6 +560,13 @@
       )}">err</span>`;
     }
     return `<span class="muted" title="not probed (rebuild envs to populate)">—</span>`;
+  }
+
+  function noveltyBand(score) {
+    const s = typeof score === "number" ? score : 0;
+    if (s >= 0.7) return "band-high";
+    if (s >= 0.3) return "band-mid";
+    return "band-low";
   }
 
   function fmtReward(v) {

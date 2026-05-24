@@ -433,9 +433,13 @@ code, pre, .mono { font-family: var(--mono); }
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--cyan));
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, background 0.3s ease;
 }
+/* Three bands keep the visual signal stronger than a single 0->1 gradient:
+   amber for "boring", purple for the middle, cyan for the standouts. */
+.novelty-bar > span.band-low    { background: var(--amber); }
+.novelty-bar > span.band-mid    { background: var(--accent); }
+.novelty-bar > span.band-high   { background: var(--cyan); }
 
 .module-card .reason {
   color: var(--text-dim);
