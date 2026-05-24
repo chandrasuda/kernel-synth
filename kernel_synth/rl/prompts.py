@@ -87,6 +87,47 @@ clipped to roughly [-0.2, 1.5]. Incorrect outputs get -0.1.
 * When in doubt, time `torch.compile` and try to fold your kernel into the
   parts where it's slowest.
 
+# Triton starter you can adapt
+
+Here is a minimal vector-add kernel + dispatcher that already conforms to
+the patterns above. Use it as a skeleton: copy into `triton_kernels.py`,
+rename the kernel, swap the inner math for what `reference.py` computes,
+and adjust the BLOCK_SIZE / grid for your shapes.
+
+```python
+import torch
+import triton
+import triton.language as tl
+
+
+@triton.jit
+def add_kernel(
+    X_ptr, Y_ptr, OUT_ptr,
+    N,
+    BLOCK_SIZE: tl.constexpr,
+):
+    pid = tl.program_id(axis=0)
+    offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < N
+    x = tl.load(X_ptr + offsets, mask=mask)
+    y = tl.load(Y_ptr + offsets, mask=mask)
+    tl.store(OUT_ptr + offsets, x + y, mask=mask)
+
+
+def triton_add(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    assert x.is_contiguous() and y.is_contiguous() and x.shape == y.shape
+    out = torch.empty_like(x)
+    n = x.numel()
+    BLOCK = 1024
+    grid = (triton.cdiv(n, BLOCK),)
+    add_kernel[grid](x, y, out, n, BLOCK_SIZE=BLOCK)
+    return out
+```
+
+For reductions (e.g. rowwise softmax) the pattern is the same with
+`tl.max` / `tl.sum` over the BLOCK axis; keep one program per row and pick
+BLOCK >= the row width (padded with `-inf` / `0` via the mask).
+
 Start. Don't deliberate.
 """
 
