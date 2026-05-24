@@ -1147,6 +1147,15 @@ def main(argv: list[str] | None = None) -> int:
     DTYPE = active_dtype
     result["warnings"].extend(dtype_warnings)
 
+    # Reset the per-device peak memory counter so the figure we report at
+    # the end reflects only what this benchmark allocated, not anything
+    # the user happened to import beforehand.
+    if active_device == "cuda" and torch.cuda.is_available():
+        try:
+            torch.cuda.reset_peak_memory_stats()
+        except Exception:  # noqa: BLE001
+            pass
+
     try:
         kwargs = build_module_kwargs()
         fwd_args, fwd_kwargs = build_forward_inputs()
@@ -1264,6 +1273,18 @@ def main(argv: list[str] | None = None) -> int:
             result["eager_speedup"] = result["eager_ms"] / result["solution_ms"]
         if result["compile_ms"]:
             result["compile_ratio"] = result["compile_ms"] / result["solution_ms"]
+
+    # ---- CUDA memory accounting ----
+    if active_device == "cuda" and torch.cuda.is_available():
+        try:
+            result["max_memory_mb"] = (
+                torch.cuda.max_memory_allocated() / (1024 * 1024)
+            )
+            result["max_reserved_mb"] = (
+                torch.cuda.max_memory_reserved() / (1024 * 1024)
+            )
+        except Exception as e:  # noqa: BLE001
+            result["warnings"].append(f"cuda mem accounting failed: {{e!r}}")
 
     _emit(result, args.json)
     return 0 if result["correct"] else 1
