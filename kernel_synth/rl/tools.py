@@ -85,6 +85,19 @@ class KernelAgentTools:
             },
         },
         {
+            "name": "list_workspace",
+            "description": (
+                "List only files under the scratch ``workspace/`` directory, "
+                "with their sizes in bytes. Useful when you want to see what "
+                "you've staged without re-walking the whole env tree."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "read_file",
             "description": (
                 "Read the contents of a file inside the env folder. "
@@ -231,6 +244,8 @@ class KernelAgentTools:
         try:
             if name == "list_files":
                 return self.list_files()
+            if name == "list_workspace":
+                return self.list_workspace()
             if name == "read_file":
                 return self.read_file(
                     str(args.get("path", "")),
@@ -272,6 +287,32 @@ class KernelAgentTools:
             rows.append((rel, p.stat().st_size))
         if not rows:
             return "(empty env)"
+        width = max(len(r) for r, _ in rows)
+        return "\n".join(f"{r:<{width}}  {s:>9} B" for r, s in rows)
+
+    def list_workspace(self) -> str:
+        """Like :meth:`list_files` but scoped to ``workspace/``.
+
+        Keeps the agent's view tight when only the scratch area is
+        interesting — the full env tree includes ``reference.py`` /
+        ``inputs.py`` / ``benchmark.py`` which it already knows about.
+        """
+        ws = self.env_dir / "workspace"
+        if not ws.is_dir():
+            return "(no workspace/ — call write_file with a workspace/... path to create one)"
+        rows: list[tuple[str, int]] = []
+        for p in sorted(ws.rglob("*")):
+            if not p.is_file():
+                continue
+            if p.name == "__pycache__" or "__pycache__" in p.parts:
+                continue
+            try:
+                rel = str(p.relative_to(self.env_dir))
+            except ValueError:
+                continue
+            rows.append((rel, p.stat().st_size))
+        if not rows:
+            return "(workspace/ is empty)"
         width = max(len(r) for r, _ in rows)
         return "\n".join(f"{r:<{width}}  {s:>9} B" for r, s in rows)
 
