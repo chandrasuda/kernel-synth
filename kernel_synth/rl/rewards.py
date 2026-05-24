@@ -15,14 +15,24 @@ attribute the reward later.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import asdict, dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 WRONG_PENALTY = -0.1
 PROGRESS_MIN = -0.2
 PROGRESS_MAX = 1.5
+
+# If torch.compile is within this relative margin of eager, the denominator
+# (eager - compile) is degenerate and the progress ratio is meaningless.
+# Below this threshold we fall back to the eager-only denominator and tag
+# the components dict so downstream consumers (SPA, RL postprocessing)
+# can flag the rollout instead of treating it as a real score.
+COMPILE_DEGENERATE_REL = 0.02
 
 
 @dataclass
@@ -85,13 +95,36 @@ def compute_reward(
         compile_ratio = compile_pos / soln_pos
 
     progress: float | None = None
+    degenerate = False
     if eager_pos is not None and soln_pos is not None:
-        # If torch.compile didn't beat eager (or is missing), use a tiny
-        # epsilon so we still reward speedups against eager.
+        # If torch.compile didn't beat eager (or is too close to it), the
+        # standard denominator collapses; fall back to the eager-only one and
+        # warn so callers know the resulting ratio is approximate.
         if compile_pos is not None and (eager_pos - compile_pos) > 1e-6:
-            denom = eager_pos - compile_pos
+            relative_gap = (eager_pos - compile_pos) / max(eager_pos, 1e-6)
+            if relative_gap < COMPILE_DEGENERATE_REL:
+                degenerate = True
+                denom = max(eager_pos, 1e-6)
+                logger.warning(
+                    "rewards: degenerate denominator — eager_ms=%.4f and "
+                    "compile_ms=%.4f are within %.1f%% of each other; "
+                    "falling back to eager-only progress.",
+                    eager_pos,
+                    compile_pos,
+                    COMPILE_DEGENERATE_REL * 100.0,
+                )
+            else:
+                denom = eager_pos - compile_pos
         else:
             denom = max(eager_pos, 1e-6)
+            if compile_pos is not None:
+                degenerate = True
+                logger.warning(
+                    "rewards: torch.compile is no faster than eager "
+                    "(eager=%.4f, compile=%.4f); using eager-only progress.",
+                    eager_pos,
+                    compile_pos,
+                )
         progress = (eager_pos - soln_pos) / denom
 
     if not correct:
@@ -112,6 +145,7 @@ def compute_reward(
         "compile_ratio": compile_ratio,
         "wrong_penalty": WRONG_PENALTY,
         "progress_clip": [PROGRESS_MIN, PROGRESS_MAX],
+        "compile_denominator_degenerate": degenerate,
     }
     return RewardBreakdown(reward=float(reward), components=components).to_dict()
 
