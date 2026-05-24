@@ -1,32 +1,28 @@
 % CS 224R Milestone Report (5%) --- due 5/22/26.
 \documentclass[10pt]{article}
-\usepackage[margin=0.72in]{geometry}
+\usepackage[margin=0.6in]{geometry}
 \usepackage{times}
 \usepackage[hidelinks]{hyperref}
 \usepackage{booktabs}
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{0.12em}
+\setlength{\parskip}{0.08em}
 \emergencystretch=3em
-\renewcommand{\arraystretch}{0.95}
-\newcommand{\milesec}[1]{\par\vspace{0.35em}\noindent{\large\bfseries #1}\par\vspace{0.05em}}
-\newcommand{\milesubsec}[1]{\par\vspace{0.20em}\noindent{\bfseries #1}\par\vspace{0.02em}}
+\renewcommand{\arraystretch}{0.88}
+\newcommand{\milesec}[1]{\par\vspace{0.20em}\noindent{\large\bfseries #1}\par\vspace{0.02em}}
+\newcommand{\milesubsec}[1]{\par\vspace{0.12em}\noindent{\bfseries #1}\par\vspace{0.01em}}
 \date{}
 
 \begin{document}
 \begin{center}
-  {\large\bfseries Milestone Report\par}
-  \vspace{2pt}
-  {\Large\bfseries Self-Improving Agent Harnesses via Trace-Derived\\ RL Environments for Custom-Kernel Engineering\par}
-  \vspace{6pt}
-  {\normalsize Chandra Suda \quad Aaditya Nalawade\par}
-  \vspace{1pt}
-  {\small CS 224R: Deep Reinforcement Learning, Stanford \quad\textbar\quad May 23, 2026\par}
+  {\large\bfseries CS 224R Milestone Report: Self-Improving Agent Harnesses\\ via Trace-Derived RL Environments for Custom-Kernel Engineering\par}
+  \vspace{3pt}
+  {\small Chandra Suda \quad Aaditya Nalawade \quad\textbar\quad Stanford \quad\textbar\quad May 23, 2026\par}
 \end{center}
-\vspace{-0.4em}
-\linespread{0.94}\selectfont
+\vspace{-0.6em}
+\linespread{0.92}\selectfont
 
 \milesec{1.\ Experiments so far}
-Our overarching objective is an ML-research agent that mines its own traces, diagnoses defects, synthesizes verifiable RL environments for those defects, and trains a lightweight LoRA policy that improves future harness behavior. For the milestone we narrowed the verifier domain to \emph{GPU kernel engineering} (\S2) and built \texttt{kernel-synth} (\url{https://github.com/chandrasuda/kernel-synth}): a trace-derived environment factory that shallow-clones a GitHub repo, walks its AST to enumerate every \texttt{nn.Module} subclass, and selects a diverse, non-obvious subset using either our custom tool-use agent harness or a deterministic AST heuristic favoring modules with unusual forward operations or imports of known custom-kernel libraries (Triton, FlashAttention, Mamba SSM). Each selected module is converted into a self-contained RL environment: a frozen reference, an auto-inferred input generator, an editable solution scaffold, a benchmarking harness, and metadata; a local FastAPI viewer browses the catalog. On top of this we wired a Harbor-style ATIF~v1.7 rollout layer that uses \texttt{torch.compile} as the reward ceiling and exposes Triton-only agent tools inside a workspace sandbox; baseline and \texttt{torch.compile} rollouts already validate against the schema.
+For the milestone we narrowed the original objective (self-improving agent harnesses via trace-derived RL environments) to its first concrete verifier domain, \emph{GPU kernel engineering} (\S2), and built \texttt{kernel-synth} (\url{https://github.com/chandrasuda/kernel-synth}): a trace-derived environment factory that shallow-clones a GitHub repo, walks its AST to enumerate every \texttt{nn.Module} subclass, and selects a diverse, non-obvious subset using either our custom tool-use agent harness or a deterministic AST heuristic favoring modules with unusual forward operations or imports of known custom-kernel libraries (Triton, FlashAttention, Mamba SSM). Each selected module is converted into a self-contained RL environment: a frozen reference, an auto-inferred input generator, an editable solution scaffold, a benchmarking harness, and metadata; a local FastAPI viewer browses the catalog. On top of this we wired a Harbor-style ATIF~v1.7 rollout layer that uses \texttt{torch.compile} as the reward ceiling and exposes Triton-only agent tools inside a workspace sandbox; baseline and \texttt{torch.compile} rollouts already validate against the schema.
 
 \milesubsec{1.1\ Required experiment}
 We ran the pipeline end-to-end in deterministic-heuristic mode on \textbf{five PyTorch repos chosen for mechanism diversity}:
@@ -56,12 +52,12 @@ repo & py files & kept & avg novelty & top picks \\
 \textbf{The closed-loop hypothesis is unchanged}: agents improve faster when their RL training environments are mined from real trace/code distributions than when they are hand-designed. \textbf{What narrowed} is the verifier (``general ML-research harness defects'' $\to$ ``GPU kernel engineering''), because kernels admit a cheap, fully-automatable, \emph{dense} reward (numerical equivalence + wall-clock speedup vs \texttt{torch.compile}), which is exactly what makes long-horizon RL tractable; general ML-research decisions are subjective, slow to verify, and contaminated by API/cost noise, so they are better attacked once the loop is proven on the kernel sub-domain. \textbf{Preserved}: trace-derived envs, GRPO+LoRA training, evaluation vs base / SFT / prompt-only baselines, ablations over env-derivation vs synthetic. \textbf{New}: a concrete environment factory (\texttt{kernel-synth}), an external expert baseline (\texttt{torch.compile}) defining the reward ceiling, and Triton as a much smaller action space than the full agentic one (substantially easier to RL).
 
 \milesec{3.\ Steps to completion}
-\textbf{(1) Harden the rollout layer:} stress-test the per-environment benchmark pipeline, tighten the agent-mode tool-use loop, and improve the auto-inferred input generators so more environments run end-to-end out of the box. \textbf{(2)~Generate trajectories at scale:} run the latest frontier models and open-source coding LLMs over the 35 environments plus a held-out 5 repos to produce $N\!\approx\!200$ ATIF trajectories with rewards in $\{-0.1\}\cup[-0.2,1.5]$. \textbf{(3)~GRPO+LoRA training} on Qwen3-1.7B or SmolLM3-3B with reward $r=\mathrm{clip}((t_e-t_s)/(t_e-t_c),-0.2,1.5)$ ($t_e,t_s,t_c$~=~eager/solution/compile latency) gated by correctness; evaluate on held-out repos vs base, prompt-only self-reflection, and SFT. \textbf{(4)~Ablations:} (a)~heuristic vs agent env-selection, (b)~trace-derived envs vs a generic Triton-toy-task curriculum, (c)~\texttt{torch.compile} ceiling on/off. \textbf{(5)~Final eval:} best-of-$N$ solve rate, mean reward, fraction of held-out modules reaching $r\!\geq\!0.5$, and the $t_s/t_c$ distribution.
+\textbf{(1)~Harden the rollout layer:} stress-test the benchmark pipeline, tighten the agent-mode loop, improve auto-inferred input generators so more environments run end-to-end out of the box. \textbf{(2)~Generate trajectories at scale:} latest frontier and open-source coding LLMs over 35 + 5 held-out environments, $N\!\approx\!200$ ATIF trajectories with rewards in $\{-0.1\}\cup[-0.2,1.5]$. \textbf{(3)~GRPO+LoRA} on Qwen3-1.7B or SmolLM3-3B with $r=\mathrm{clip}((t_e-t_s)/(t_e-t_c),-0.2,1.5)$ ($t_e,t_s,t_c$~=~eager/solution/compile latency) gated by correctness; evaluated vs base, prompt-only self-reflection, and SFT. \textbf{(4)~Ablations:} heuristic vs agent env-selection; trace-derived vs generic Triton-toy curriculum; \texttt{torch.compile} ceiling on/off. \textbf{(5)~Final eval:} best-of-$N$ solve rate, mean reward, fraction reaching $r\!\geq\!0.5$, and $t_s/t_c$ distribution.
 
-\milesubsec{3.1\ Scope realism and risks}
-The remaining work is mostly trajectory generation + a small RL training loop on a $\leq$3B model, both of which we have run before. \textbf{Risks.} (i)~On CPU, \texttt{torch.compile} on small modules is often slower than eager, compressing the reward gap; mitigation is CUDA-aware benchmark presets that size shapes large enough for compilation to amortize. (ii)~Several environments still need hand-tuned input shapes; we will auto-detect the common cases (Embedding $\Rightarrow$ Long ids, Conv $\Rightarrow$ image tensors). (iii)~The environment distribution may concentrate around attention variants; we will pull held-out repos from disjoint mechanism families (state-space, audio codec, ViT, MoE) to widen coverage.
+\milesubsec{3.1\ Realism and risks}
+Remaining work is trajectory generation + a small RL loop on a $\leq$3B model, both already prototyped. \textbf{Risks:} (i)~CPU \texttt{torch.compile} on small modules can be slower than eager, compressing the reward gap (mitigation: CUDA-aware benchmark presets); (ii)~several environments still need hand-tuned input shapes (mitigation: auto-detection of Embedding/Conv consumers); (iii)~environment distribution may concentrate around attention variants (mitigation: held-out repos from disjoint mechanism families).
 
 \milesec{4.\ Team contributions}
-\textbf{Chandra Suda} (to date): kernel-synth data pipeline, AST heuristic for module selection, environment converter with import filtering and helper lifting, FastAPI viewer, Harbor-style ATIF rollout layer. \textbf{Aaditya Nalawade} (to date): related-work survey, reward-shape design, GRPO+LoRA training scaffold on Qwen3-1.7B, KernelBench-mini comparison baseline. \textbf{Planned split.} Chandra: agent-mode trajectory generation, held-out evaluation, env-selection ablations. Aaditya: training-loop integration, failure-mode analysis, KernelBench comparison. \textbf{Shared:} error analysis, final write-up, poster + presentation.
+\textbf{Chandra Suda}: kernel-synth pipeline, AST heuristic, environment converter, FastAPI viewer, ATIF rollout layer; will own agent-mode trajectories, held-out eval, env-selection ablations. \textbf{Aaditya Nalawade}: related-work survey, reward-shape design, GRPO+LoRA scaffold (Qwen3-1.7B), KernelBench-mini baseline; will own training-loop integration, failure-mode analysis. \textbf{Shared}: error analysis, write-up, presentation.
 
 \end{document}
