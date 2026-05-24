@@ -625,3 +625,27 @@ code, pre, .mono { font-family: var(--mono); }
 
 /* Hidden utility */
 .hidden { display: none !important; }
+
+/* ------- health pulse dot ------- */
+.health-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--text-muted);
+  display: inline-block;
+  margin-left: 4px;
+  box-shadow: 0 0 0 0 rgba(109, 247, 193, 0);
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+.health-dot.ok {
+  background: var(--green);
+  animation: health-pulse 2.4s ease-out infinite;
+}
+.health-dot.err { background: var(--rose); }
+.health-dot.loading { background: var(--text-muted); }
+
+@keyframes health-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(109, 247, 193, 0.45); }
+  70%  { box-shadow: 0 0 0 8px rgba(109, 247, 193, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(109, 247, 193, 0); }
+}

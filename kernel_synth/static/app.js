@@ -13,6 +13,7 @@
   const state = {
     repos: [],
     stats: null,
+    health: null,
     activeSlug: null,
     activeRecord: null,
     filter: "",
@@ -24,7 +25,7 @@
   // Boot
   // -----------------------------------------------------------
   async function boot() {
-    await Promise.all([loadRepos(), loadStats()]);
+    await Promise.all([loadRepos(), loadStats(), loadHealth()]);
     renderTopbar();
     renderSidebar();
     if (state.repos.length > 0) {
@@ -79,6 +80,28 @@
   async function loadStats() {
     const res = await fetch("/api/stats");
     state.stats = await res.json();
+  }
+
+  async function loadHealth() {
+    const dot = document.getElementById("health-dot");
+    try {
+      const res = await fetch("/api/health");
+      if (!res.ok) throw new Error(`/api/health ${res.status}`);
+      const h = await res.json();
+      state.health = h;
+      if (dot) {
+        dot.classList.remove("loading", "err");
+        dot.classList.add("ok");
+        dot.title = `v${h.version} · ${h.n_repos} repos · ${h.n_envs} envs · started ${h.boot_time}`;
+      }
+    } catch (e) {
+      state.health = null;
+      if (dot) {
+        dot.classList.remove("loading", "ok");
+        dot.classList.add("err");
+        dot.title = `health check failed: ${e.message}`;
+      }
+    }
   }
 
   async function loadRepoDetail(slug) {

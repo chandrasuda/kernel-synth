@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,8 +24,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import __version__
 from .extractor import load_all, repo_slug
 from .models import RepoRecord
+
+
+_BOOT_TIME = datetime.now(timezone.utc)
 
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -57,6 +62,35 @@ app.mount(
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(str(_STATIC_DIR / "index.html"))
+
+
+@app.get("/api/health")
+def health() -> JSONResponse:
+    """Lightweight liveness probe + tiny inventory summary.
+
+    Surfaces enough state for the SPA to render a faint pulse dot and
+    show the build timestamp without paying for the full ``/api/stats``
+    walk.
+    """
+    records = load_all(_extracted_root())
+    envs_root = _envs_root()
+    n_envs = 0
+    if envs_root.is_dir():
+        n_envs = sum(
+            1
+            for d in envs_root.iterdir()
+            if d.is_dir() and (d / "env.json").is_file()
+        )
+    return JSONResponse(
+        {
+            "ok": True,
+            "version": __version__,
+            "boot_time": _BOOT_TIME.isoformat(),
+            "now": datetime.now(timezone.utc).isoformat(),
+            "n_repos": len(records),
+            "n_envs": n_envs,
+        }
+    )
 
 
 @app.get("/api/repos")
