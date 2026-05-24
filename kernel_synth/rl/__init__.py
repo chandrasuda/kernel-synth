@@ -24,7 +24,7 @@ from .atif import (
     TrajectoryBuilder,
     validate,
 )
-from .env import KernelEnv, StepResult
+from .env import HistoryEntry, KernelEnv, StepResult
 from .prompts import KERNEL_AGENT_SYSTEM_PROMPT, render_user_prompt
 from .rewards import RewardBreakdown, RewardComponents, RewardResult, compute_reward
 from .tools import KernelAgentTools, ToolError
@@ -34,6 +34,7 @@ __all__ = [
     "AgentRollout",
     "AtifAgent",
     "FinalMetrics",
+    "HistoryEntry",
     "KERNEL_AGENT_SYSTEM_PROMPT",
     "KernelAgentTools",
     "KernelEnv",

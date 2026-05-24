@@ -31,6 +31,16 @@ class StepResult:
     info: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class HistoryEntry:
+    """One ``(tool_call, step_result)`` pair retained by :class:`KernelEnv`."""
+
+    tool_call: dict[str, Any]
+    observation: str | dict[str, Any]
+    done: bool
+    info: dict[str, Any]
+
+
 class KernelEnv:
     """One env folder, exposed as a gym-style environment.
 
@@ -69,6 +79,7 @@ class KernelEnv:
         self._class_name: str | None = None
         self._seed: int | None = None
         self._step_count: int = 0
+        self._history: list[HistoryEntry] = []
 
         self._load_env_metadata()
         self._cache_originals()
@@ -91,6 +102,16 @@ class KernelEnv:
     def baseline(self) -> dict[str, Any] | None:
         return self._baseline
 
+    @property
+    def history(self) -> list[HistoryEntry]:
+        """Per-step ``(tool_call, observation)`` log for the live rollout.
+
+        Reset to ``[]`` on each :meth:`reset` call. Exposed so external
+        debug tooling (notebooks, the SPA replay viewer) can inspect what
+        the agent did without re-reading the persisted trace JSON.
+        """
+        return list(self._history)
+
     def reset(self, *, seed: int | None = None) -> dict[str, Any]:
         """Restore solution + triton_kernels to originals, clear workspace,
         run a baseline benchmark, and return the initial observation.
@@ -107,6 +128,7 @@ class KernelEnv:
         self._restore_originals()
         self._ensure_workspace()
         self._step_count = 0
+        self._history.clear()
         if seed is not None:
             os.environ["KERNEL_SYNTH_SEED"] = str(int(seed))
             self._seed = int(seed)
@@ -155,7 +177,16 @@ class KernelEnv:
         done = bool(self.tools.finished)
         if done:
             info["finish_notes"] = self.tools.finish_notes
-        return StepResult(observation=observation, reward=0.0, done=done, info=info)
+        result = StepResult(observation=observation, reward=0.0, done=done, info=info)
+        self._history.append(
+            HistoryEntry(
+                tool_call={"name": name, "arguments": dict(args)},
+                observation=observation,
+                done=done,
+                info=dict(info),
+            )
+        )
+        return result
 
     def finalize(self, *, runs: int = 20) -> dict[str, Any]:
         """Run the final benchmark, compute the reward, and return the dict.
