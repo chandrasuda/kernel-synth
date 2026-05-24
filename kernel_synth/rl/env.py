@@ -85,7 +85,7 @@ class KernelEnv:
         """Restore solution + triton_kernels to originals, clear workspace,
         run a baseline benchmark, and return the initial observation."""
         self._restore_originals()
-        self._clear_workspace()
+        self._ensure_workspace()
         self.tools = KernelAgentTools(
             self.env_dir,
             python=self.python,
@@ -199,11 +199,24 @@ class KernelEnv:
         for fname, content in self._originals.items():
             (self.env_dir / fname).write_text(content, encoding="utf-8")
 
-    def _clear_workspace(self) -> None:
+    def _ensure_workspace(self) -> None:
+        """Recreate workspace/ from scratch.
+
+        We re-create the directory unconditionally so a missing or partially
+        deleted ``workspace/`` between rollouts heals on the next ``reset()``.
+        If something in there is held open by another process the rmtree
+        ignores the failure and we still ``mkdir(parents=True, exist_ok=True)``
+        to guarantee the path exists.
+        """
         ws = self.env_dir / "workspace"
-        if ws.exists():
+        if ws.is_dir():
             shutil.rmtree(ws, ignore_errors=True)
-        ws.mkdir(exist_ok=True)
+        elif ws.exists():
+            try:
+                ws.unlink()
+            except OSError:
+                pass
+        ws.mkdir(parents=True, exist_ok=True)
 
 
 def _f(x: Any) -> float | None:
