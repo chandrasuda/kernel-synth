@@ -70,6 +70,52 @@
     if (slug && slug !== state.activeSlug) selectRepo(slug);
   });
 
+  // ----- keyboard navigation -----
+  // j/k move repo selection one row at a time (vim-style), "/" focuses the
+  // search box, Escape clears the search and returns focus to the body.
+  // We only intercept these when no input/textarea has focus so the keys
+  // remain usable inside search.
+  document.addEventListener("keydown", (e) => {
+    const active = document.activeElement;
+    const inEditable =
+      active &&
+      ((active.tagName === "INPUT" && active.type !== "button") ||
+        active.tagName === "TEXTAREA" ||
+        active.isContentEditable);
+    if (e.key === "/" && !inEditable) {
+      e.preventDefault();
+      searchEl.focus();
+      searchEl.select();
+      return;
+    }
+    if (e.key === "Escape" && active === searchEl) {
+      searchEl.value = "";
+      state.filter = "";
+      renderSidebar();
+      if (state.activeRecord) renderRepoDetail(state.activeRecord);
+      searchEl.blur();
+      return;
+    }
+    if (inEditable) return;
+    if (state.activeTab !== "repos") return;
+    if (e.key === "j" || e.key === "k") {
+      const visible = state.repos.filter((r) =>
+        repoMatchesFilter(r, state.filter)
+      );
+      if (!visible.length) return;
+      const idx = visible.findIndex((r) => r.slug === state.activeSlug);
+      let next = idx;
+      if (e.key === "j") next = idx < 0 ? 0 : Math.min(idx + 1, visible.length - 1);
+      if (e.key === "k") next = idx <= 0 ? 0 : idx - 1;
+      const target = visible[next];
+      if (target && target.slug !== state.activeSlug) {
+        location.hash = `#${encodeURIComponent(target.slug)}`;
+        selectRepo(target.slug);
+      }
+      e.preventDefault();
+    }
+  });
+
   // -----------------------------------------------------------
   // Data
   // -----------------------------------------------------------
