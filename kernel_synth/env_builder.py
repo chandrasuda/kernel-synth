@@ -800,11 +800,19 @@ def _write_inputs(
         """
         import torch
 
-        # Shared problem-size knobs. Tune these for your benchmark.
-        BATCH = 2
-        SEQ_LEN = 64
-        HIDDEN = 64
-        HEADS = 4
+        # Shared problem-size knobs. The CUDA preset is intentionally larger
+        # so torch.compile has enough work to amortize its dispatcher
+        # overhead — on CPU we stay tiny so the harness is snappy.
+        if torch.cuda.is_available():
+            BATCH = 8
+            SEQ_LEN = 512
+            HIDDEN = 256
+            HEADS = 8
+        else:
+            BATCH = 2
+            SEQ_LEN = 64
+            HIDDEN = 64
+            HEADS = 4
         HEAD_DIM = HIDDEN // HEADS
         DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
         DTYPE = torch.float32
