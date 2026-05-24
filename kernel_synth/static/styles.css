@@ -379,6 +379,34 @@ code, pre, .mono { font-family: var(--mono); }
   color: var(--text-muted);
   margin-top: 4px;
   word-break: break-all;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.module-card .file > span { flex: 1 1 auto; min-width: 0; }
+.module-card .file .copy-btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.module-card .file .copy-btn:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.module-card .file .copy-btn.copied {
+  color: var(--green);
+  border-color: rgba(109, 247, 193, 0.4);
+  background: rgba(109, 247, 193, 0.10);
 }
 
 .novelty {

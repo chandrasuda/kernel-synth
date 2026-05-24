@@ -291,12 +291,24 @@
 
   function moduleCard(c) {
     const nov = Math.round(c.novelty_score * 100);
+    // We build the absolute path on the server side when possible (via the
+    // record's local_path), but the module list endpoint only ships the
+    // repo-relative ``file_path``. Copying that is still useful — the agent
+    // can prefix it with ``data/clones/<owner>/<repo>/`` themselves.
     return `
       <article class="module-card glass">
         <div class="head">
           <div>
             <div class="title">${escape(c.class_name)}</div>
-            <div class="file">${escape(c.file_path)} · lines ${c.start_line}-${c.end_line}</div>
+            <div class="file">
+              <span>${escape(c.file_path)} · lines ${c.start_line}-${c.end_line}</span>
+              <button
+                class="copy-btn"
+                data-copy="${escape(c.file_path)}"
+                title="Copy ${escape(c.file_path)} to clipboard"
+                aria-label="Copy file path"
+              >copy</button>
+            </div>
           </div>
           <div class="novelty">
             <div class="value">${c.novelty_score.toFixed(2)}</div>
@@ -318,6 +330,37 @@
       </article>
     `;
   }
+
+  // Single delegated handler — saves us from binding a listener per card.
+  document.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest("button.copy-btn");
+    if (!btn) return;
+    const text = btn.dataset.copy || "";
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      const orig = btn.textContent;
+      btn.textContent = "copied";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.classList.remove("copied");
+      }, 1200);
+    } catch (_e) {
+      btn.textContent = "err";
+      setTimeout(() => (btn.textContent = "copy"), 1200);
+    }
+  });
 
   function traceItem(e) {
     const kind = (e.kind || "").toLowerCase();
