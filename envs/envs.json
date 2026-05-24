@@ -111,6 +111,89 @@
       ]
     },
     {
+      "name": "lucidrains__local-attention__LocalMHA",
+      "class_name": "LocalMHA",
+      "repo": "lucidrains/local-attention",
+      "repo_url": "https://github.com/lucidrains/local-attention",
+      "source_file": "local_attention/transformer.py",
+      "novelty_score": 0.7100000000000001,
+      "tags": [
+        "einsum",
+        "imports:einops",
+        "math-heavy",
+        "self-contained",
+        "softmax"
+      ]
+    },
+    {
+      "name": "lucidrains__local-attention__LocalAttention",
+      "class_name": "LocalAttention",
+      "repo": "lucidrains/local-attention",
+      "repo_url": "https://github.com/lucidrains/local-attention",
+      "source_file": "local_attention/local_attention.py",
+      "novelty_score": 0.45999999999999996,
+      "tags": [
+        "einsum",
+        "imports:einops",
+        "looks-generic",
+        "math-heavy",
+        "self-contained",
+        "softmax"
+      ]
+    },
+    {
+      "name": "lucidrains__local-attention__DynamicPositionBias",
+      "class_name": "DynamicPositionBias",
+      "repo": "lucidrains/local-attention",
+      "repo_url": "https://github.com/lucidrains/local-attention",
+      "source_file": "local_attention/transformer.py",
+      "novelty_score": 0.4,
+      "tags": [
+        "imports:einops",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "lucidrains__local-attention__SinusoidalEmbeddings",
+      "class_name": "SinusoidalEmbeddings",
+      "repo": "lucidrains/local-attention",
+      "repo_url": "https://github.com/lucidrains/local-attention",
+      "source_file": "local_attention/rotary.py",
+      "novelty_score": 0.32999999999999996,
+      "tags": [
+        "einsum",
+        "imports:einops",
+        "looks-generic",
+        "self-contained",
+        "uses-buffers"
+      ]
+    },
+    {
+      "name": "lucidrains__local-attention__LocalTransformer",
+      "class_name": "LocalTransformer",
+      "repo": "lucidrains/local-attention",
+      "repo_url": "https://github.com/lucidrains/local-attention",
+      "source_file": "local_attention/transformer.py",
+      "novelty_score": 0.15,
+      "tags": [
+        "imports:einops",
+        "looks-generic",
+        "self-contained"
+      ]
+    },
+    {
+      "name": "lucidrains__local-attention__GEGLU",
+      "class_name": "GEGLU",
+      "repo": "lucidrains/local-attention",
+      "repo_url": "https://github.com/lucidrains/local-attention",
+      "source_file": "local_attention/transformer.py",
+      "novelty_score": 0.13,
+      "tags": [
+        "gelu",
+        "imports:einops"
+      ]
+    },
+    {
       "name": "lucidrains__vit-pytorch__DSSA",
       "class_name": "DSSA",
       "repo": "lucidrains/vit-pytorch",

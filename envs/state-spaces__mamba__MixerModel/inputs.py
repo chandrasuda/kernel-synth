@@ -19,7 +19,7 @@ def build_module_kwargs() -> dict:
     """Constructor kwargs for the reference / solution module."""
     return dict(
         d_model=64,
-        n_layer=None  # TODO: pick a value for 'n_layer',
+        n_layer=2,
         d_intermediate=None  # TODO: pick a value for 'd_intermediate',
         vocab_size=1024,
     )

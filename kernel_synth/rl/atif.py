@@ -4,7 +4,7 @@ Subset of the spec we need for kernel-engineering rollouts. Includes the
 validators that matter for downstream RL post-training:
     * sequential ``step_id`` starting at 1
     * agent-only fields refused on system/user steps
-    * tool_call → observation.results.source_call_id correlation
+    * tool_call -> observation.results.source_call_id correlation
     * ISO-8601 timestamps
 
 Spec: https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md
@@ -12,16 +12,26 @@ Spec: https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-
 
 from __future__ import annotations
 
+import json
 import re
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 
 SCHEMA_VERSION = "ATIF-v1.7"
 ISO_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+\-]\d{2}:\d{2})$"
 )
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace(
+        "+00:00", "Z"
+    )
 
 
 class ToolCall(BaseModel):
@@ -115,7 +125,9 @@ class FinalMetrics(BaseModel):
     extra: dict[str, Any] | None = None
 
 
-class Agent(BaseModel):
+class AtifAgent(BaseModel):
+    """Agent metadata block. Named ``AtifAgent`` per the v1.7 spec."""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str
@@ -125,13 +137,18 @@ class Agent(BaseModel):
     extra: dict[str, Any] | None = None
 
 
+# Back-compat alias — the spec calls this ``AtifAgent`` but earlier drafts
+# of this file used ``Agent``. Keep both importable.
+Agent = AtifAgent
+
+
 class Trajectory(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str = SCHEMA_VERSION
     session_id: str | None = None
     trajectory_id: str | None = None
-    agent: Agent
+    agent: AtifAgent
     steps: list[Step] = Field(default_factory=list)
     notes: str | None = None
     final_metrics: FinalMetrics | None = None
@@ -169,3 +186,180 @@ class Trajectory(BaseModel):
 
 
 Trajectory.model_rebuild()  # support self-referential subagent_trajectories
+
+
+# ---------------------------------------------------------------------------
+# TrajectoryBuilder — incremental construction
+
+
+class TrajectoryBuilder:
+    """Append-only trajectory builder with monotonic ``step_id`` and
+    auto-timestamped steps.
+
+    Typical usage::
+
+        b = TrajectoryBuilder(agent=AtifAgent(name="kernel-agent", version="0.1"))
+        b.add_step(source="system", message=KERNEL_AGENT_SYSTEM_PROMPT)
+        b.add_step(source="user", message=initial_prompt)
+        # ... loop ...
+        b.add_step(
+            source="agent",
+            model_name="claude-sonnet-4-5",
+            message=assistant_text,
+            tool_calls=[ToolCall(...)],
+            observation=Observation(results=[ObservationResult(...)]),
+        )
+        traj = b.build(final_metrics=FinalMetrics(...))
+        path.write_text(json.dumps(b.to_json_dict(), indent=2))
+    """
+
+    def __init__(
+        self,
+        *,
+        agent: AtifAgent,
+        session_id: str | None = None,
+        trajectory_id: str | None = None,
+        notes: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        self.agent = agent
+        self.session_id = session_id or f"sess-{uuid.uuid4().hex[:12]}"
+        self.trajectory_id = trajectory_id or f"traj-{uuid.uuid4().hex[:12]}"
+        self.notes = notes
+        self.extra = extra
+        self._steps: list[Step] = []
+        self._final_metrics: FinalMetrics | None = None
+
+    # ---- step API ----
+
+    def add_step(
+        self,
+        *,
+        source: Literal["system", "user", "agent"],
+        message: str | list[dict[str, Any]] = "",
+        model_name: str | None = None,
+        reasoning_effort: str | float | None = None,
+        reasoning_content: str | None = None,
+        tool_calls: list[ToolCall] | None = None,
+        observation: Observation | None = None,
+        metrics: Metrics | None = None,
+        extra: dict[str, Any] | None = None,
+        llm_call_count: int | None = None,
+        timestamp: str | None = None,
+    ) -> Step:
+        step = Step(
+            step_id=len(self._steps) + 1,
+            timestamp=timestamp or _now_iso(),
+            source=source,
+            model_name=model_name,
+            reasoning_effort=reasoning_effort,
+            message=message,
+            reasoning_content=reasoning_content,
+            tool_calls=tool_calls,
+            observation=observation,
+            metrics=metrics,
+            extra=extra,
+            llm_call_count=llm_call_count,
+        )
+        self._steps.append(step)
+        return step
+
+    @property
+    def steps(self) -> list[Step]:
+        return self._steps
+
+    def last_step(self) -> Step | None:
+        return self._steps[-1] if self._steps else None
+
+    # ---- finalize ----
+
+    def set_final_metrics(self, fm: FinalMetrics) -> None:
+        self._final_metrics = fm
+
+    def aggregate_metrics(self, extra: dict[str, Any] | None = None) -> FinalMetrics:
+        """Sum per-step token counts/costs into a fresh ``FinalMetrics``.
+
+        Pass ``extra`` to overlay rollout-level fields (e.g. ``{"reward": ...}``).
+        """
+        tot_p = tot_c = tot_cached = 0
+        tot_cost = 0.0
+        any_tokens = any_cost = False
+        for s in self._steps:
+            m = s.metrics
+            if m is None:
+                continue
+            if m.prompt_tokens is not None:
+                tot_p += m.prompt_tokens
+                any_tokens = True
+            if m.completion_tokens is not None:
+                tot_c += m.completion_tokens
+                any_tokens = True
+            if m.cached_tokens is not None:
+                tot_cached += m.cached_tokens
+                any_tokens = True
+            if m.cost_usd is not None:
+                tot_cost += m.cost_usd
+                any_cost = True
+        return FinalMetrics(
+            total_prompt_tokens=tot_p if any_tokens else None,
+            total_completion_tokens=tot_c if any_tokens else None,
+            total_cached_tokens=tot_cached if any_tokens else None,
+            total_cost_usd=tot_cost if any_cost else None,
+            total_steps=len(self._steps),
+            extra=extra,
+        )
+
+    def build(self, final_metrics: FinalMetrics | None = None) -> Trajectory:
+        if final_metrics is not None:
+            self._final_metrics = final_metrics
+        return Trajectory(
+            schema_version=SCHEMA_VERSION,
+            session_id=self.session_id,
+            trajectory_id=self.trajectory_id,
+            agent=self.agent,
+            steps=list(self._steps),
+            notes=self.notes,
+            final_metrics=self._final_metrics,
+            extra=self.extra,
+        )
+
+    def to_json_dict(self, *, exclude_none: bool = True) -> dict[str, Any]:
+        return self.build().to_json_dict(exclude_none=exclude_none)
+
+    def write_json(self, path: Path | str, *, indent: int = 2) -> Path:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(self.to_json_dict(), indent=indent), encoding="utf-8")
+        return p
+
+
+# ---------------------------------------------------------------------------
+# validate() helper
+
+
+def validate(path_or_dict: Path | str | dict[str, Any]) -> tuple[bool, list[str]]:
+    """Round-trip a trajectory through the Pydantic models.
+
+    Returns ``(ok, errors)``. ``errors`` is a flat list of "loc: msg" strings.
+    """
+    errors: list[str] = []
+    payload: dict[str, Any] | None = None
+    try:
+        if isinstance(path_or_dict, dict):
+            payload = path_or_dict
+        else:
+            p = Path(path_or_dict)
+            if not p.is_file():
+                return False, [f"{p}: file not found"]
+            payload = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        return False, [f"load failed: {e!r}"]
+
+    try:
+        Trajectory.model_validate(payload)
+    except ValidationError as e:
+        for err in e.errors():
+            loc = ".".join(str(x) for x in err.get("loc", ()))
+            errors.append(f"{loc}: {err.get('msg', '')}")
+        return False, errors
+    return True, []

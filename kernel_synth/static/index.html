@@ -22,10 +22,14 @@
           <p>RL environment buffer · custom-kernel candidates</p>
         </div>
       </div>
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="repos">repos</button>
+        <button class="tab" data-tab="envs">envs / rollouts</button>
+      </nav>
       <div class="topbar-stats" id="topbar-stats"></div>
     </header>
 
-    <main class="layout">
+    <main class="layout" id="layout-repos">
       <aside class="sidebar glass" id="sidebar">
         <div class="sidebar-head">
           <h2>Repositories</h2>
@@ -50,6 +54,12 @@
             <code>python -m kernel_synth.scripts.seed_repos</code>
           </p>
         </div>
+      </section>
+    </main>
+
+    <main class="layout layout-single hidden" id="layout-envs">
+      <section class="content" id="envs-content">
+        <div class="placeholder glass">Loading envs…</div>
       </section>
     </main>
 

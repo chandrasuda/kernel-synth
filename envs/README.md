@@ -5,8 +5,8 @@ Auto-generated from extracted PyTorch modules. Each subfolder is a
 implementation of the reference module and beat it on latency while
 staying numerically equivalent.
 
-- **Envs:** 35
-- **Source repos:** 5
+- **Envs:** 41
+- **Source repos:** 6
 
 ## Layout per env
 
@@ -46,6 +46,12 @@ python harness.py --json
 | [`RelativePositionBias`](./lucidrains__audiolm-pytorch__RelativePositionBias) | `lucidrains/audiolm-pytorch` | 0.65 | imports:einops, self-contained |
 | [`AudioLM`](./lucidrains__audiolm-pytorch__AudioLM) | `lucidrains/audiolm-pytorch` | 0.65 | imports:einops, self-contained |
 | [`MultiScaleDiscriminator`](./lucidrains__audiolm-pytorch__MultiScaleDiscriminator) | `lucidrains/audiolm-pytorch` | 0.65 | imports:einops, self-contained |
+| [`LocalMHA`](./lucidrains__local-attention__LocalMHA) | `lucidrains/local-attention` | 0.71 | einsum, imports:einops, math-heavy, self-contained, softmax |
+| [`LocalAttention`](./lucidrains__local-attention__LocalAttention) | `lucidrains/local-attention` | 0.46 | einsum, imports:einops, looks-generic, math-heavy, self-contained, softmax |
+| [`DynamicPositionBias`](./lucidrains__local-attention__DynamicPositionBias) | `lucidrains/local-attention` | 0.40 | imports:einops, self-contained |
+| [`SinusoidalEmbeddings`](./lucidrains__local-attention__SinusoidalEmbeddings) | `lucidrains/local-attention` | 0.33 | einsum, imports:einops, looks-generic, self-contained, uses-buffers |
+| [`LocalTransformer`](./lucidrains__local-attention__LocalTransformer) | `lucidrains/local-attention` | 0.15 | imports:einops, looks-generic, self-contained |
+| [`GEGLU`](./lucidrains__local-attention__GEGLU) | `lucidrains/local-attention` | 0.13 | gelu, imports:einops |
 | [`DSSA`](./lucidrains__vit-pytorch__DSSA) | `lucidrains/vit-pytorch` | 0.98 | custom-init, einsum, imports:einops, math-heavy, self-contained |
 | [`NaViT`](./lucidrains__vit-pytorch__NaViT) | `lucidrains/vit-pytorch` | 0.98 | custom-init, imports:einops, math-heavy, self-contained, topk |
 | [`DistillWrapper`](./lucidrains__vit-pytorch__DistillWrapper) | `lucidrains/vit-pytorch` | 0.98 | custom-init, imports:einops, math-heavy, self-contained, softmax |

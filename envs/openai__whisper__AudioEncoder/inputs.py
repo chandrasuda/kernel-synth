@@ -18,11 +18,11 @@ DTYPE = torch.float32
 def build_module_kwargs() -> dict:
     """Constructor kwargs for the reference / solution module."""
     return dict(
-        n_mels=None  # TODO: pick a value for 'n_mels',
-        n_ctx=None  # TODO: pick a value for 'n_ctx',
-        n_state=None  # TODO: pick a value for 'n_state',
+        n_mels=80,
+        n_ctx=64,
+        n_state=64,
         n_head=4,
-        n_layer=None  # TODO: pick a value for 'n_layer',
+        n_layer=2,
     )
 
 

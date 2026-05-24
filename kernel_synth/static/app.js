@@ -5,6 +5,10 @@
   const contentEl = document.getElementById("content");
   const searchEl = document.getElementById("search");
   const topbarStatsEl = document.getElementById("topbar-stats");
+  const tabsEl = document.getElementById("tabs");
+  const layoutReposEl = document.getElementById("layout-repos");
+  const layoutEnvsEl = document.getElementById("layout-envs");
+  const envsContentEl = document.getElementById("envs-content");
 
   const state = {
     repos: [],
@@ -12,6 +16,8 @@
     activeSlug: null,
     activeRecord: null,
     filter: "",
+    envs: null,
+    activeTab: "repos",
   };
 
   // -----------------------------------------------------------
@@ -25,6 +31,29 @@
       const fromHash = decodeURIComponent((location.hash || "").replace(/^#/, ""));
       const initial = state.repos.find((r) => r.slug === fromHash) || state.repos[0];
       selectRepo(initial.slug);
+    }
+    if (tabsEl) {
+      tabsEl.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-tab]");
+        if (!btn) return;
+        switchTab(btn.dataset.tab);
+      });
+    }
+  }
+
+  function switchTab(tab) {
+    state.activeTab = tab;
+    for (const btn of tabsEl.querySelectorAll("button[data-tab]")) {
+      btn.classList.toggle("active", btn.dataset.tab === tab);
+    }
+    if (tab === "envs") {
+      layoutReposEl.classList.add("hidden");
+      layoutEnvsEl.classList.remove("hidden");
+      if (state.envs === null) loadAndRenderEnvs();
+      else renderEnvs(state.envs);
+    } else {
+      layoutEnvsEl.classList.add("hidden");
+      layoutReposEl.classList.remove("hidden");
     }
   }
 
@@ -245,6 +274,115 @@
     if ((c.reason || "").toLowerCase().includes(f)) return true;
     if ((c.tags || []).some((t) => t.toLowerCase().includes(f))) return true;
     return false;
+  }
+
+  // -----------------------------------------------------------
+  // Envs / rollouts tab
+  // -----------------------------------------------------------
+  async function loadAndRenderEnvs() {
+    envsContentEl.innerHTML = `<div class="placeholder glass">Loading envs…</div>`;
+    try {
+      const res = await fetch("/api/envs");
+      if (!res.ok) throw new Error(`/api/envs ${res.status}`);
+      state.envs = await res.json();
+      renderEnvs(state.envs);
+    } catch (e) {
+      envsContentEl.innerHTML = `<div class="placeholder glass">Failed to load envs: ${escape(
+        e.message
+      )}</div>`;
+    }
+  }
+
+  function renderEnvs(envs) {
+    const total = envs.length;
+    const withReward = envs.filter((e) => e.best_reward !== null && e.best_reward !== undefined);
+    const traced = envs.filter((e) => (e.n_traces || 0) > 0);
+
+    const summary = `
+      <div class="envs-header glass">
+        <div>
+          <h2>RL envs · ${total}</h2>
+          <p class="muted">
+            ${traced.length} with at least one rollout · ${withReward.length} with a reward.
+            <br />
+            Run more:
+            <code>python -m kernel_synth.scripts.rollout &lt;env&gt; --mode baseline</code>
+            ·
+            <code>--mode torch_compile</code>
+            ·
+            <code>--mode agent</code>
+          </p>
+        </div>
+      </div>
+    `;
+
+    const tableRows = envs
+      .map((e) => {
+        const best = fmtReward(e.best_reward);
+        const latest = fmtReward(e.latest_reward);
+        const traceLink = e.best_trace
+          ? `<a href="/api/envs/${encodeURIComponent(
+              e.slug
+            )}/traces/${encodeURIComponent(e.best_trace)}" target="_blank">${escape(
+              e.best_trace
+            )}</a>`
+          : `<span class="muted">no traces</span>`;
+        const tags = (e.tags || [])
+          .slice(0, 3)
+          .map((t) => `<span class="tag">${escape(t)}</span>`)
+          .join("");
+        return `
+          <tr>
+            <td class="mono">${escape(e.slug)}</td>
+            <td>${escape(e.class_name || "")}</td>
+            <td><a href="${escape(e.repo_url || "#")}" target="_blank">${escape(
+          e.repo || ""
+        )}</a></td>
+            <td class="tags-cell">${tags}</td>
+            <td class="right">${e.n_traces || 0}</td>
+            <td class="right reward ${rewardClass(e.best_reward)}">${best}</td>
+            <td class="right reward ${rewardClass(e.latest_reward)}">${latest}</td>
+            <td class="mono">${escape(e.best_mode || e.latest_mode || "")}</td>
+            <td>${traceLink}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const table = `
+      <div class="envs-table-wrap glass">
+        <table class="envs-table">
+          <thead>
+            <tr>
+              <th>env</th>
+              <th>class</th>
+              <th>repo</th>
+              <th>tags</th>
+              <th class="right">traces</th>
+              <th class="right">best reward</th>
+              <th class="right">latest reward</th>
+              <th>best mode</th>
+              <th>best trace</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+    `;
+
+    envsContentEl.innerHTML = `<div class="repo-detail">${summary}${table}</div>`;
+  }
+
+  function fmtReward(v) {
+    if (v === null || v === undefined) return "—";
+    return Number(v).toFixed(3);
+  }
+  function rewardClass(v) {
+    if (v === null || v === undefined) return "neutral";
+    if (v >= 0.8) return "good";
+    if (v >= 0.2) return "ok";
+    if (v < 0) return "bad";
+    return "neutral";
   }
 
   // -----------------------------------------------------------

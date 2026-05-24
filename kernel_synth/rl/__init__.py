@@ -2,14 +2,18 @@
 kernel-optimization environment.
 
 Public surface:
-    KernelEnv         — gym-style env wrapping one env folder
-    AgentRollout      — one episode (LLM agent + tools + env)
-    compute_reward    — eager <-> torch.compile reward function
-    Trajectory        — ATIF v1.7 root model
+    KernelEnv           — gym-style env wrapping one env folder
+    KernelAgentTools    — bundle of sandboxed tools for one env
+    rollout             — produce one ATIF trajectory from an env folder
+    RolloutResult       — return value of ``rollout()``
+    compute_reward      — eager/torch.compile speedup -> scalar reward
+    Trajectory / ATIF   — Pydantic models + TrajectoryBuilder + validate
 """
 
+from .agent_loop import AgentRollout, RolloutMode, RolloutResult, rollout
 from .atif import (
     Agent,
+    AtifAgent,
     FinalMetrics,
     Metrics,
     Observation,
@@ -17,23 +21,36 @@ from .atif import (
     Step,
     ToolCall,
     Trajectory,
+    TrajectoryBuilder,
+    validate,
 )
-from .env import KernelEnv
-from .agent_loop import AgentRollout, RolloutResult
+from .env import KernelEnv, StepResult
+from .prompts import KERNEL_AGENT_SYSTEM_PROMPT, render_user_prompt
 from .rewards import RewardBreakdown, compute_reward
+from .tools import KernelAgentTools, ToolError
 
 __all__ = [
     "Agent",
     "AgentRollout",
+    "AtifAgent",
     "FinalMetrics",
+    "KERNEL_AGENT_SYSTEM_PROMPT",
+    "KernelAgentTools",
     "KernelEnv",
     "Metrics",
     "Observation",
     "ObservationResult",
     "RewardBreakdown",
+    "RolloutMode",
     "RolloutResult",
     "Step",
+    "StepResult",
     "ToolCall",
+    "ToolError",
     "Trajectory",
+    "TrajectoryBuilder",
     "compute_reward",
+    "render_user_prompt",
+    "rollout",
+    "validate",
 ]

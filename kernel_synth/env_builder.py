@@ -59,7 +59,9 @@ def build_env(
     _write_reference(env_dir / "reference.py", imports=imports, cand=cand)
     _write_inputs(env_dir / "inputs.py", init_sig=init_sig, forward_sig=forward_sig)
     _write_solution(env_dir / "solution.py", cand=cand)
+    _write_triton_kernels(env_dir / "triton_kernels.py", cand=cand)
     _write_harness(env_dir / "harness.py", cand=cand)
+    _write_benchmark(env_dir / "benchmark.py", cand=cand)
     _write_env_json(env_dir / "env.json", record=record, cand=cand)
     _write_readme(
         env_dir / "README.md",
@@ -68,6 +70,8 @@ def build_env(
         init_sig=init_sig,
         forward_sig=forward_sig,
     )
+    (env_dir / "workspace").mkdir(exist_ok=True)
+    (env_dir / "traces").mkdir(exist_ok=True)
     return env_dir
 
 
@@ -416,12 +420,17 @@ _INIT_NUMERIC_DEFAULTS = {
     "input_dim": 64, "output_dim": 64, "in_features": 64, "out_features": 64,
     "heads": 4, "n_heads": 4, "num_heads": 4, "n_head": 4,
     "head_dim": 16, "dim_head": 16,
-    "depth": 2, "n_layers": 2, "num_layers": 2, "layers": 2,
+    "depth": 2, "n_layers": 2, "num_layers": 2, "layers": 2, "n_layer": 2,
     "max_pos": 64, "max_len": 64, "max_seq_len": 64, "max_position": 64,
-    "vocab_size": 1024, "num_classes": 10, "num_tokens": 1024,
+    "vocab_size": 1024, "num_classes": 10, "num_tokens": 1024, "n_vocab": 1024,
     "image_size": 32, "patch_size": 4, "channels": 3, "in_channels": 3, "out_channels": 16,
     "d_state": 16, "d_conv": 4, "expand": 2, "dt_rank": "'auto'", "headdim": 16,
     "kernel_size": 3, "stride": 1, "padding": 0,
+    # Whisper-style ``n_*`` short names — keep these consistent with the
+    # SEQ_LEN / HIDDEN / HEADS knobs in inputs.py so shapes line up.
+    "n_state": 64, "n_ctx": 64, "n_mels": 80,
+    # Other common attention/embedding parameters
+    "n_features": 64, "feature_dim": 64, "model_dim": 64,
 }
 
 _INIT_BOOL_DEFAULTS = {
@@ -573,18 +582,33 @@ def _write_inputs(
 
 
 def _write_solution(path: Path, *, cand: ModuleCandidate) -> None:
+    """Agent-facing solution template — a task spec, not just a thin wrapper."""
     text = textwrap.dedent(f'''\
-        """Your optimized implementation of {cand.class_name}.
+        """Task spec for the kernel-engineering agent.
 
-        Replace the body of ``build`` with anything that:
+        Goal
+        ----
+        Write **Triton** kernels (no raw CUDA) that match ``reference.{cand.class_name}``
+        numerically and are faster than PyTorch eager — ideally faster than
+        ``torch.compile``. ``build(**kwargs)`` must keep returning something
+        callable like the reference module.
 
-        * accepts the same constructor kwargs as the reference module
-        * is callable like ``module(*args, **kwargs)``
-        * returns the same shape & dtype, numerically equivalent
+        Files
+        -----
+        * ``reference.py``       — frozen target; read-only.
+        * ``inputs.py``          — drives the benchmark shapes/kwargs; read-only.
+        * ``triton_kernels.py``  — write your @triton.jit kernels here.
+        * ``solution.py``        — THIS FILE. Wire the kernels in below the marker.
 
-        You may use: pure PyTorch, ``torch.compile``, Triton, custom CUDA, etc.
-        Don't touch ``reference.py`` or ``inputs.py``.
+        Constraints
+        -----------
+        * Triton only — no raw CUDA, no .cu files, no cpp_extension.
+        * Restricted to writing files inside this folder via ``write_file``.
+        * Must keep ``build(**kwargs)`` callable and module-compatible.
+        * Must produce numerically-equivalent outputs (rtol=1e-3, atol=1e-4).
         """
+        from __future__ import annotations
+
         import sys
         from pathlib import Path
 
@@ -592,15 +616,370 @@ def _write_solution(path: Path, *, cand: ModuleCandidate) -> None:
 
         import reference  # noqa: E402
 
+        # The empty stub is here so ``solution.py`` is importable even before
+        # you've written any kernels. Once you add kernels, import + use them
+        # below the marker.
+        try:
+            import triton_kernels  # noqa: F401,E402
+        except Exception:  # noqa: BLE001
+            triton_kernels = None  # type: ignore[assignment]
+
+
+        # === REPLACE BELOW ===
+        # Baseline implementation: wraps the reference verbatim, speedup = 1.0.
+        # Replace this with a module that calls into your Triton kernels.
 
         def build(**kwargs):
             """Return a module instance to be benchmarked.
 
-            The default returns the reference verbatim — your starting baseline,
-            with speedup = 1.0. Beat it.
+            Must accept the same kwargs as ``reference.{cand.class_name}`` and
+            return something callable like ``module(*args, **kwargs)`` that
+            produces the same shape/dtype/values within tolerance.
             """
             return reference.{cand.class_name}(**kwargs)
+
+        # === REPLACE ABOVE ===
         ''')
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_triton_kernels(path: Path, *, cand: ModuleCandidate) -> None:
+    """Empty-ish Triton kernel module the agent can fill in."""
+    text = textwrap.dedent(f'''\
+        """Triton kernels for {cand.class_name}.
+
+        Fill this in. Typical pattern::
+
+            import triton
+            import triton.language as tl
+
+
+            @triton.jit
+            def my_fused_kernel(
+                X_ptr, Y_ptr, OUT_ptr,
+                N: tl.constexpr,
+                BLOCK_SIZE: tl.constexpr,
+            ):
+                pid = tl.program_id(0)
+                offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+                mask = offsets < N
+                x = tl.load(X_ptr + offsets, mask=mask)
+                y = tl.load(Y_ptr + offsets, mask=mask)
+                tl.store(OUT_ptr + offsets, x + y, mask=mask)
+
+
+            def fused_add(x, y):
+                out = torch.empty_like(x)
+                N = x.numel()
+                BLOCK = 1024
+                grid = ((N + BLOCK - 1) // BLOCK,)
+                my_fused_kernel[grid](x, y, out, N, BLOCK)
+                return out
+
+        Then import + call ``fused_add`` from ``solution.py``.
+
+        Tips
+        ----
+        * Mark sizes / strides as ``tl.constexpr`` when they're fixed.
+        * On CUDA, prefer ``tl.dot`` over hand-rolled matmuls.
+        * Keep a Python fallback in solution.py for shapes your kernel
+          doesn't support — better correct & slow than broken.
+        """
+        from __future__ import annotations
+
+        # Optional — Triton isn't available on every machine. Import lazily so
+        # importing this module never explodes; the agent should add the
+        # ``import triton`` line right alongside its kernels.
+        ''')
+    path.write_text(text, encoding="utf-8")
+
+
+_BENCHMARK_TEMPLATE = '''\
+"""Benchmark for the {class_name} kernel-engineering env.
+
+Prints a single JSON object on stdout (with ``--json``) containing the
+three timings + correctness:
+
+    {{
+      "eager_ms":      <float | None>,
+      "compile_ms":    <float | None>,
+      "solution_ms":   <float | None>,
+      "correct":       <bool>,
+      "max_diff":      <float>,
+      "eager_speedup": <float | None>,   # eager_ms / solution_ms
+      "compile_ratio": <float | None>,   # compile_ms / solution_ms
+      "device":        "cpu" | "cuda",
+      "dtype":         "torch.float32",
+      "runs":          <int>,
+      "error":         <string, only on failure>,
+    }}
+
+Even if any single piece fails, the script still emits a JSON object so
+the agent harness can read it.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+import traceback
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+import torch  # noqa: E402
+
+WARMUP_RUNS = 3
+
+
+def _sync():
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+
+def _to(obj, device, dtype):
+    if isinstance(obj, torch.Tensor):
+        if obj.dtype.is_floating_point:
+            return obj.to(device=device, dtype=dtype)
+        return obj.to(device=device)
+    if isinstance(obj, (list, tuple)):
+        return type(obj)(_to(x, device, dtype) for x in obj)
+    if isinstance(obj, dict):
+        return {{k: _to(v, device, dtype) for k, v in obj.items()}}
+    return obj
+
+
+def _time(module, args, kwargs, runs: int) -> tuple[object, float]:
+    """Warm + time. Returns (last output, avg ms per run)."""
+    with torch.no_grad():
+        for _ in range(WARMUP_RUNS):
+            out = module(*args, **kwargs)
+    _sync()
+    t0 = time.perf_counter()
+    with torch.no_grad():
+        for _ in range(runs):
+            out = module(*args, **kwargs)
+    _sync()
+    return out, (time.perf_counter() - t0) * 1000.0 / runs
+
+
+def _allclose(a, b, rtol=1e-3, atol=1e-4):
+    if isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
+        if a.shape != b.shape:
+            return False, float("inf")
+        af = a.detach().float()
+        bf = b.detach().float()
+        diff = (af - bf).abs().max().item()
+        ok = diff < atol + rtol * bf.abs().max().item()
+        return ok, float(diff)
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)) and len(a) == len(b):
+        worst = 0.0
+        ok = True
+        for x, y in zip(a, b):
+            okx, dx = _allclose(x, y, rtol, atol)
+            ok = ok and okx
+            worst = max(worst, dx)
+        return ok, worst
+    return a == b, 0.0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--runs", type=int, default=20)
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Skip timing — only verify correctness against eager.",
+    )
+    args = parser.parse_args(argv)
+
+    torch.manual_seed(0)
+
+    result: dict = {{
+        "module": "{class_name}",
+        "runs": args.runs,
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "dtype": "torch.float32",
+        "eager_ms": None,
+        "compile_ms": None,
+        "solution_ms": None,
+        "correct": False,
+        "max_diff": float("inf"),
+        "eager_speedup": None,
+        "compile_ratio": None,
+        "warnings": [],
+    }}
+
+    # ---- Imports ----
+    try:
+        import reference
+        import solution as solution_mod
+        from inputs import (
+            BATCH, SEQ_LEN, HIDDEN, HEADS, HEAD_DIM, DEVICE, DTYPE,
+            build_module_kwargs, build_forward_inputs,
+        )
+    except Exception as e:
+        result["error"] = "import_failed"
+        result["detail"] = repr(e)
+        result["traceback"] = traceback.format_exc(limit=4)
+        _emit(result, args.json)
+        return 2
+
+    try:
+        kwargs = build_module_kwargs()
+        fwd_args, fwd_kwargs = build_forward_inputs()
+    except Exception as e:
+        result["error"] = "input_build_failed"
+        result["detail"] = repr(e)
+        result["traceback"] = traceback.format_exc(limit=4)
+        _emit(result, args.json)
+        return 3
+
+    # ---- Build eager reference (seed before every constructor so all three
+    # modules share the same random weights) ----
+    try:
+        torch.manual_seed(0)
+        eager_mod = reference.{class_name}(**kwargs).to(DEVICE, DTYPE)
+        eager_mod.eval()
+    except Exception as e:
+        result["error"] = "reference_init_failed"
+        result["detail"] = repr(e)
+        result["traceback"] = traceback.format_exc(limit=4)
+        _emit(result, args.json)
+        return 4
+
+    # Place inputs on device.
+    try:
+        fwd_args = _to(fwd_args, DEVICE, DTYPE)
+        fwd_kwargs = _to(fwd_kwargs, DEVICE, DTYPE)
+    except Exception as e:
+        result["error"] = "input_to_device_failed"
+        result["detail"] = repr(e)
+        _emit(result, args.json)
+        return 5
+
+    # ---- Build solution ----
+    try:
+        torch.manual_seed(0)
+        solution_mod_instance = solution_mod.build(**kwargs)
+        if hasattr(solution_mod_instance, "to"):
+            solution_mod_instance = solution_mod_instance.to(DEVICE, DTYPE)
+        if hasattr(solution_mod_instance, "eval"):
+            solution_mod_instance.eval()
+        # If the solution exposes the underlying nn.Module state, mirror it
+        # from the eager reference so weight-init randomness can't drive a
+        # false negative.
+        try:
+            if hasattr(solution_mod_instance, "load_state_dict") and \
+                    hasattr(eager_mod, "state_dict"):
+                solution_mod_instance.load_state_dict(eager_mod.state_dict(), strict=False)
+        except Exception:
+            pass
+    except Exception as e:
+        result["error"] = "solution_build_failed"
+        result["detail"] = repr(e)
+        result["traceback"] = traceback.format_exc(limit=4)
+        _emit(result, args.json)
+        return 6
+
+    # ---- Reference forward + timing ----
+    try:
+        eager_out, eager_ms = _time(eager_mod, fwd_args, fwd_kwargs, args.runs)
+        result["eager_ms"] = eager_ms
+    except Exception as e:
+        result["error"] = "eager_forward_failed"
+        result["detail"] = repr(e)
+        result["traceback"] = traceback.format_exc(limit=4)
+        _emit(result, args.json)
+        return 7
+
+    # ---- torch.compile baseline (best-effort) ----
+    if not args.check_only:
+        try:
+            torch.manual_seed(0)
+            compile_target = reference.{class_name}(**kwargs).to(DEVICE, DTYPE).eval()
+            compile_target.load_state_dict(eager_mod.state_dict(), strict=False)
+            compiled_mod = torch.compile(
+                compile_target,
+                dynamic=True,
+                fullgraph=False,
+            )
+            _, compile_ms = _time(compiled_mod, fwd_args, fwd_kwargs, args.runs)
+            result["compile_ms"] = compile_ms
+        except Exception as e:
+            result["compile_ms"] = None
+            result["warnings"].append(f"torch.compile failed: {{e!r}}")
+
+    # ---- Solution forward + timing ----
+    try:
+        if args.check_only:
+            with torch.no_grad():
+                sol_out = solution_mod_instance(*fwd_args, **fwd_kwargs)
+        else:
+            sol_out, sol_ms = _time(
+                solution_mod_instance, fwd_args, fwd_kwargs, args.runs
+            )
+            result["solution_ms"] = sol_ms
+    except Exception as e:
+        result["error"] = "solution_forward_failed"
+        result["detail"] = repr(e)
+        result["traceback"] = traceback.format_exc(limit=4)
+        _emit(result, args.json)
+        return 8
+
+    # ---- Correctness ----
+    correct, diff = _allclose(eager_out, sol_out)
+    result["correct"] = bool(correct)
+    result["max_diff"] = float(diff)
+
+    if result["solution_ms"] and result["solution_ms"] > 0:
+        if result["eager_ms"]:
+            result["eager_speedup"] = result["eager_ms"] / result["solution_ms"]
+        if result["compile_ms"]:
+            result["compile_ratio"] = result["compile_ms"] / result["solution_ms"]
+
+    _emit(result, args.json)
+    return 0 if result["correct"] else 1
+
+
+def _emit(result: dict, as_json: bool) -> None:
+    if as_json:
+        # JSON strict spec disallows NaN/Infinity; replace before serializing
+        # so JS consumers (the SPA) can parse the output.
+        import math as _math
+        def _clean(v):
+            if isinstance(v, float):
+                if _math.isnan(v) or _math.isinf(v):
+                    return None
+                return v
+            if isinstance(v, dict):
+                return {{k: _clean(x) for k, x in v.items()}}
+            if isinstance(v, (list, tuple)):
+                return [_clean(x) for x in v]
+            return v
+        print(json.dumps(_clean(result), indent=2))
+        return
+    print(f"== {{result['module']}} ==")
+    for k in ("device", "dtype", "runs", "eager_ms", "compile_ms",
+              "solution_ms", "eager_speedup", "compile_ratio",
+              "correct", "max_diff"):
+        if k in result:
+            print(f"  {{k:>16s}}  {{result[k]}}")
+    for w in result.get("warnings", []):
+        print(f"  WARNING: {{w}}")
+    if "error" in result:
+        print(f"  ERROR: {{result['error']}}  ({{result.get('detail', '')}})")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+
+
+def _write_benchmark(path: Path, *, cand: ModuleCandidate) -> None:
+    text = _BENCHMARK_TEMPLATE.format(class_name=cand.class_name)
     path.write_text(text, encoding="utf-8")
 
 
