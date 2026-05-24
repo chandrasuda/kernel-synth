@@ -68,12 +68,20 @@ class KernelEnv:
         self._inputs_source: str | None = None
         self._class_name: str | None = None
         self._seed: int | None = None
+        self._step_count: int = 0
 
         self._load_env_metadata()
         self._cache_originals()
 
     # ------------------------------------------------------------------
     # Public surface
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            f"KernelEnv(env={self.env_dir.name!r}, class={self.class_name!r}, "
+            f"n_steps={self._step_count}, "
+            f"finished={getattr(self.tools, 'finished', False)})"
+        )
 
     @property
     def class_name(self) -> str:
@@ -98,6 +106,7 @@ class KernelEnv:
         """
         self._restore_originals()
         self._ensure_workspace()
+        self._step_count = 0
         if seed is not None:
             os.environ["KERNEL_SYNTH_SEED"] = str(int(seed))
             self._seed = int(seed)
@@ -134,6 +143,7 @@ class KernelEnv:
         name = str(tool_call.get("name", ""))
         args = tool_call.get("arguments") or {}
         output = self.tools.dispatch(name, args)
+        self._step_count += 1
 
         if isinstance(output, dict):
             observation: str | dict[str, Any] = output
