@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import time
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 try:
     import anthropic  # type: ignore[import-not-found]
@@ -72,6 +74,12 @@ class LLMClient:
                 "No LLM provider available. Set ANTHROPIC_API_KEY or OPENAI_API_KEY."
             )
 
+    # Retry knobs for transient 429 / 5xx / connection errors. Override via
+    # env vars for ops without touching code.
+    DEFAULT_MAX_RETRIES = int(os.environ.get("KERNEL_SYNTH_LLM_MAX_RETRIES", "5"))
+    DEFAULT_BASE_DELAY_S = float(os.environ.get("KERNEL_SYNTH_LLM_BASE_DELAY_S", "0.75"))
+    DEFAULT_MAX_DELAY_S = float(os.environ.get("KERNEL_SYNTH_LLM_MAX_DELAY_S", "20.0"))
+
     def chat(
         self,
         *,
@@ -81,8 +89,32 @@ class LLMClient:
         max_tokens: int = 4096,
     ) -> ChatResponse:
         if self.provider == "anthropic":
-            return self._chat_anthropic(system, messages, tools, max_tokens)
-        return self._chat_openai(system, messages, tools, max_tokens)
+            fn = lambda: self._chat_anthropic(system, messages, tools, max_tokens)
+        else:
+            fn = lambda: self._chat_openai(system, messages, tools, max_tokens)
+        return self._with_retry(fn)
+
+    def _with_retry(self, fn: Callable[[], ChatResponse]) -> ChatResponse:
+        """Call ``fn`` with exponential backoff + jitter on transient errors.
+
+        Retried: HTTP 429 and 5xx, connection / timeout errors. Non-retryable
+        errors (4xx other than 429, validation errors, anything we can't
+        classify as transient) propagate immediately so the caller sees them.
+        """
+        max_retries = self.DEFAULT_MAX_RETRIES
+        delay = self.DEFAULT_BASE_DELAY_S
+        for attempt in range(max_retries + 1):
+            try:
+                return fn()
+            except Exception as e:  # noqa: BLE001
+                if attempt >= max_retries or not _is_transient_llm_error(e):
+                    raise
+                sleep_for = min(delay, self.DEFAULT_MAX_DELAY_S)
+                sleep_for += random.uniform(0, sleep_for * 0.25)
+                time.sleep(sleep_for)
+                delay *= 2.0
+        # Unreachable — the loop either returns or raises.
+        raise RuntimeError("LLMClient._with_retry exhausted without returning")
 
     def _chat_anthropic(
         self,
@@ -241,3 +273,44 @@ def _anthropic_msg_to_openai(m: dict) -> list[dict]:
 def is_available() -> bool:
     """True if either provider has an API key in the environment."""
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("OPENAI_API_KEY"))
+
+
+# Names of exception classes we always treat as transient regardless of
+# whatever attributes the SDK happens to expose this week.
+_TRANSIENT_EXC_NAMES = frozenset(
+    {
+        "RateLimitError",
+        "APIConnectionError",
+        "APITimeoutError",
+        "InternalServerError",
+        "ServiceUnavailableError",
+        "Timeout",
+        "ReadTimeout",
+        "ConnectTimeout",
+        "ConnectionError",
+        "RemoteProtocolError",
+    }
+)
+
+
+def _is_transient_llm_error(exc: BaseException) -> bool:
+    """Best-effort classifier across anthropic / openai / httpx exception zoo.
+
+    Both SDKs expose ``.status_code`` on ``APIStatusError``; we treat 429 and
+    5xx as retryable. Connection / timeout-shaped exceptions are always
+    retryable. Everything else is fatal so the caller surfaces it.
+    """
+    if exc.__class__.__name__ in _TRANSIENT_EXC_NAMES:
+        return True
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        # OpenAI sometimes hangs status on `response.status_code`.
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+    try:
+        code = int(status) if status is not None else None
+    except (TypeError, ValueError):
+        code = None
+    if code == 429 or (code is not None and 500 <= code < 600):
+        return True
+    return False
