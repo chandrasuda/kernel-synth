@@ -990,18 +990,32 @@ def _to(obj, device, dtype):
     return obj
 
 
-def _time(module, args, kwargs, runs: int, warmup: int) -> tuple[object, float]:
-    """Warm + time. Returns (last output, avg ms per run)."""
+def _time(
+    module, args, kwargs, runs: int, warmup: int
+) -> tuple[object, float, float]:
+    """Warm + time each run. Returns ``(last_out, mean_ms, std_ms)``.
+
+    We time runs individually so the report includes the cross-run std
+    dev — a single mean hides the variance that kills A/B comparisons
+    on first-run JIT spikes.
+    """
+    import statistics
+
     with torch.no_grad():
         for _ in range(max(0, int(warmup))):
             out = module(*args, **kwargs)
     _sync()
-    t0 = time.perf_counter()
+    samples: list = []
+    out = None
     with torch.no_grad():
-        for _ in range(runs):
+        for _ in range(max(1, int(runs))):
+            t0 = time.perf_counter()
             out = module(*args, **kwargs)
-    _sync()
-    return out, (time.perf_counter() - t0) * 1000.0 / runs
+            _sync()
+            samples.append((time.perf_counter() - t0) * 1000.0)
+    mean_ms = float(sum(samples) / len(samples))
+    std_ms = float(statistics.pstdev(samples)) if len(samples) > 1 else 0.0
+    return out, mean_ms, std_ms
 
 
 _DTYPE_TOLERANCES = {{
@@ -1116,8 +1130,11 @@ def main(argv: list[str] | None = None) -> int:
         "device": active_device,
         "dtype": str(active_dtype),
         "eager_ms": None,
+        "eager_std_ms": None,
         "compile_ms": None,
+        "compile_std_ms": None,
         "solution_ms": None,
+        "solution_std_ms": None,
         "correct": False,
         "max_diff": float("inf"),
         "eager_speedup": None,
@@ -1216,10 +1233,11 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- Reference forward + timing ----
     try:
-        eager_out, eager_ms = _time(
+        eager_out, eager_ms, eager_std = _time(
             eager_mod, fwd_args, fwd_kwargs, args.runs, args.warmup
         )
         result["eager_ms"] = eager_ms
+        result["eager_std_ms"] = eager_std
     except Exception as e:
         result["error"] = "eager_forward_failed"
         result["detail"] = repr(e)
@@ -1238,10 +1256,11 @@ def main(argv: list[str] | None = None) -> int:
                 dynamic=True,
                 fullgraph=False,
             )
-            _, compile_ms = _time(
+            _, compile_ms, compile_std = _time(
                 compiled_mod, fwd_args, fwd_kwargs, args.runs, args.warmup
             )
             result["compile_ms"] = compile_ms
+            result["compile_std_ms"] = compile_std
         except Exception as e:
             result["compile_ms"] = None
             result["warnings"].append(f"torch.compile failed: {{e!r}}")
@@ -1252,10 +1271,11 @@ def main(argv: list[str] | None = None) -> int:
             with torch.no_grad():
                 sol_out = solution_mod_instance(*fwd_args, **fwd_kwargs)
         else:
-            sol_out, sol_ms = _time(
+            sol_out, sol_ms, sol_std = _time(
                 solution_mod_instance, fwd_args, fwd_kwargs, args.runs, args.warmup
             )
             result["solution_ms"] = sol_ms
+            result["solution_std_ms"] = sol_std
     except Exception as e:
         result["error"] = "solution_forward_failed"
         result["detail"] = repr(e)
