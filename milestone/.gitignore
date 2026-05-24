@@ -1,0 +1,10 @@
+milestone.aux
+milestone.log
+milestone.out
+milestone.synctex.gz
+milestone.toc
+milestone.fls
+milestone.fdb_latexmk
+milestone.xdv
+*.bbl
+*.blg
