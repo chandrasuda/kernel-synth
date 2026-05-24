@@ -28,6 +28,7 @@ from .env import HistoryEntry, KernelEnv, StepResult
 from .prompts import KERNEL_AGENT_SYSTEM_PROMPT, render_user_prompt
 from .rewards import RewardBreakdown, RewardComponents, RewardResult, compute_reward
 from .tools import KernelAgentTools, ToolError
+from .triton_examples import TRITON_SOFTMAX_SOURCE, is_triton_available, triton_softmax
 
 __all__ = [
     "Agent",
@@ -48,12 +49,15 @@ __all__ = [
     "RolloutResult",
     "Step",
     "StepResult",
+    "TRITON_SOFTMAX_SOURCE",
     "ToolCall",
     "ToolError",
     "Trajectory",
     "TrajectoryBuilder",
     "compute_reward",
+    "is_triton_available",
     "render_user_prompt",
     "rollout",
+    "triton_softmax",
     "validate",
 ]
