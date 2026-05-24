@@ -45,6 +45,7 @@ class FileEntry:
     n_lines: int
     n_classes: int
     n_nn_modules: int
+    n_functions: int = 0   # module-level def / async def
     classes: list["ClassEntry"] = field(default_factory=list)
 
     def read(self) -> str:
@@ -78,6 +79,16 @@ class CodeBuffer:
     @property
     def n_nn_modules(self) -> int:
         return sum(f.n_nn_modules for f in self.files)
+
+    @property
+    def n_total_classes(self) -> int:
+        """Total ``class`` definitions across the buffer (nn.Module or not)."""
+        return sum(f.n_classes for f in self.files)
+
+    @property
+    def n_functions(self) -> int:
+        """Total top-level ``def`` / ``async def`` across the buffer."""
+        return sum(f.n_functions for f in self.files)
 
     def files_with_nn_modules(self) -> list[FileEntry]:
         return [f for f in self.files if f.n_nn_modules > 0]
@@ -131,6 +142,7 @@ def build_buffer(repo_root: Path) -> CodeBuffer:
 
         classes = _extract_classes(text)
         n_nn = sum(1 for c in classes if c.is_nn_module)
+        n_funcs = _count_top_level_functions(text)
         entry = FileEntry(
             path=str(py_path.relative_to(repo_root)),
             abs_path=py_path,
@@ -138,6 +150,7 @@ def build_buffer(repo_root: Path) -> CodeBuffer:
             n_lines=text.count("\n") + 1,
             n_classes=len(classes),
             n_nn_modules=n_nn,
+            n_functions=n_funcs,
             classes=classes,
         )
         buffer.files.append(entry)
@@ -163,6 +176,19 @@ def _iter_python_files(root: Path):
                 stack.append(child)
             elif child.is_file() and child.suffix == ".py":
                 yield child
+
+
+def _count_top_level_functions(source: str) -> int:
+    """Count module-level ``def`` / ``async def`` statements."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return 0
+    return sum(
+        1
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    )
 
 
 def _extract_classes(source: str) -> list[ClassEntry]:
