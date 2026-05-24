@@ -101,6 +101,26 @@ _INTERESTING_OPS = {
     "load_balance",
 }
 
+# Substrings in (lowercased) class names that suggest a non-standard
+# mechanism. Order doesn't matter; we OR-merge into one regex.
+_CREATIVE_NAME_TOKENS = (
+    "mamba", "ssm", "selective",
+    # Subquadratic / structured-attention families.
+    "hyena", "monarch", "performer", "linformer", "longformer", "linear_attention",
+    "linearattention", "linear_attn", "linearattn", "retentive", "retnet",
+    "rwkv", "bytenet", "lambda_layer", "lambdalayer", "synthesizer",
+    "fnet", "afno", "gss",
+    # MoE / routing.
+    "moe", "gated", "gating", "router", "expert", "dispatch",
+    # Custom kernels / numerics.
+    "kernel", "fourier", "wavelet", "rotary", "alibi",
+    "deformable", "sparse", "hash", "hyperbolic", "spline",
+    # Bio-inspired / continuous-time.
+    "liquid", "spiking",
+)
+_CREATIVE_NAME_RE = re.compile("|".join(_CREATIVE_NAME_TOKENS))
+
+
 _INTERESTING_IMPORTS = {
     "triton",
     "einops",
@@ -270,7 +290,7 @@ def _score_class(
         score += 0.05
 
     # --- naming creativity bonus ------------------------------------------
-    if re.search(r"(mamba|ssm|hyena|monarch|moe|gated|gating|kernel|fourier|wavelet|rotary|alibi|deformable|sparse|hash|hyperbolic|spline|liquid|spiking)", name_lower):
+    if _CREATIVE_NAME_RE.search(name_lower):
         score += 0.25
         tags.append("creative-name")
         notes.append(f"name '{node.name}' suggests a non-standard mechanism")
