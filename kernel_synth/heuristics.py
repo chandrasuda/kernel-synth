@@ -86,6 +86,19 @@ _INTERESTING_OPS = {
     "addmm",
     "baddbmm",
     "bmm",
+    # MoE-shaped ops. Routing / dispatch / expert math is exactly the kind
+    # of irregular workload where a custom kernel pays for itself, so we
+    # want the heuristic to surface modules that touch any of these names.
+    "top_k",
+    "gating",
+    "gate",
+    "expert",
+    "experts",
+    "router",
+    "routing",
+    "dispatch",
+    "combine",
+    "load_balance",
 }
 
 _INTERESTING_IMPORTS = {
