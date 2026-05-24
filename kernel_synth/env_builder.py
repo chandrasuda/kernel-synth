@@ -57,7 +57,12 @@ def build_env(
     forward_sig = _parse_signature(cand.source_code, "forward")
 
     _write_reference(env_dir / "reference.py", imports=imports, cand=cand)
-    _write_inputs(env_dir / "inputs.py", init_sig=init_sig, forward_sig=forward_sig)
+    _write_inputs(
+        env_dir / "inputs.py",
+        init_sig=init_sig,
+        forward_sig=forward_sig,
+        class_source=cand.source_code,
+    )
     _write_solution(env_dir / "solution.py", cand=cand)
     _write_triton_kernels(env_dir / "triton_kernels.py", cand=cand)
     _write_harness(env_dir / "harness.py", cand=cand)
@@ -478,19 +483,98 @@ def _guess_init_kwargs(sig: SigInfo | None) -> dict[str, str]:
     return out
 
 
-def _guess_forward_inputs(sig: SigInfo | None) -> list[tuple[str, str]]:
-    """Return [(name, generator_source)] for the forward call."""
+def _guess_forward_inputs(
+    sig: SigInfo | None,
+    *,
+    class_source: str | None = None,
+) -> list[tuple[str, str]]:
+    """Return [(name, generator_source)] for the forward call.
+
+    If ``class_source`` is provided and the class has an ``nn.Embedding``
+    that the forward consumes directly, the corresponding forward arg is
+    promoted to a Long-id generator regardless of its name. This is the
+    only reliable signal that a forward argument is a vocabulary index
+    rather than a hidden-state float tensor (which is `_generator_for`'s
+    name-pattern default).
+    """
     if sig is None:
         return [("x", "torch.randn(BATCH, SEQ_LEN, HIDDEN)")]
+    embedding_args = (
+        _embedding_consumer_args(class_source) if class_source else set()
+    )
     out: list[tuple[str, str]] = []
     for name in sig.args:
         if name in sig.defaults:
             continue  # skip kwargs in the call by default
-        gen = _generator_for(name)
+        if name in embedding_args:
+            gen = "torch.randint(0, 1024, (BATCH, SEQ_LEN))"
+        else:
+            gen = _generator_for(name)
         out.append((name, gen))
     if not out:
         out.append(("x", "torch.randn(BATCH, SEQ_LEN, HIDDEN)"))
     return out
+
+
+def _embedding_consumer_args(class_source: str) -> set[str]:
+    """Names of ``forward`` params handed straight to an ``nn.Embedding``.
+
+    We look for ``self.<attr> = nn.Embedding(...)`` (or bare ``Embedding(...)``)
+    in the class body and then for ``self.<attr>(<name>)`` calls inside
+    ``forward``. The matched ``<name>``s should be Long index tensors.
+    """
+    try:
+        tree = ast.parse(class_source)
+    except SyntaxError:
+        return set()
+
+    emb_attrs: set[str] = set()
+    forward_node: ast.FunctionDef | None = None
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for item in ast.walk(node):
+            if isinstance(item, ast.Assign):
+                for tgt in item.targets:
+                    if (
+                        isinstance(tgt, ast.Attribute)
+                        and isinstance(tgt.value, ast.Name)
+                        and tgt.value.id == "self"
+                        and isinstance(item.value, ast.Call)
+                        and _call_name_endswith(item.value.func, "Embedding")
+                    ):
+                        emb_attrs.add(tgt.attr)
+            elif isinstance(item, ast.FunctionDef) and item.name == "forward":
+                forward_node = item
+
+    if not emb_attrs or forward_node is None:
+        return set()
+
+    consumers: set[str] = set()
+    for sub in ast.walk(forward_node):
+        if not isinstance(sub, ast.Call):
+            continue
+        fn = sub.func
+        if (
+            isinstance(fn, ast.Attribute)
+            and isinstance(fn.value, ast.Name)
+            and fn.value.id == "self"
+            and fn.attr in emb_attrs
+            and sub.args
+        ):
+            first = sub.args[0]
+            if isinstance(first, ast.Name):
+                consumers.add(first.id)
+    return consumers
+
+
+def _call_name_endswith(func: ast.AST, suffix: str) -> bool:
+    """True for ``Embedding``, ``nn.Embedding``, ``torch.nn.Embedding``, ..."""
+    if isinstance(func, ast.Attribute):
+        return func.attr == suffix
+    if isinstance(func, ast.Name):
+        return func.id == suffix
+    return False
 
 
 def _generator_for(name: str) -> str:
@@ -542,9 +626,12 @@ def _write_inputs(
     *,
     init_sig: SigInfo | None,
     forward_sig: SigInfo | None,
+    class_source: str | None = None,
 ) -> None:
     init_kwargs = _guess_init_kwargs(init_sig)
-    forward_inputs = _guess_forward_inputs(forward_sig)
+    forward_inputs = _guess_forward_inputs(
+        forward_sig, class_source=class_source
+    )
 
     kw_lines = ",\n        ".join(f"{k}={v}" for k, v in init_kwargs.items())
     fwd_gens = "\n    ".join(f"{name} = {gen}" for name, gen in forward_inputs)
