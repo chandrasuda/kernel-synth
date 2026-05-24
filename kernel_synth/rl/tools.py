@@ -88,7 +88,9 @@ class KernelAgentTools:
             "name": "read_file",
             "description": (
                 "Read the contents of a file inside the env folder. "
-                "Paths are relative to the env root; `..` is rejected."
+                "Paths are relative to the env root; `..` is rejected. "
+                "For files larger than the 200 KB cap, pass start_line / "
+                "end_line (1-indexed, inclusive) to read a slice."
             ),
             "parameters": {
                 "type": "object",
@@ -96,7 +98,17 @@ class KernelAgentTools:
                     "path": {
                         "type": "string",
                         "description": "Path relative to the env folder.",
-                    }
+                    },
+                    "start_line": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "First line of the slice (1-indexed, inclusive).",
+                    },
+                    "end_line": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Last line of the slice (1-indexed, inclusive).",
+                    },
                 },
                 "required": ["path"],
                 "additionalProperties": False,
@@ -189,7 +201,11 @@ class KernelAgentTools:
             if name == "list_files":
                 return self.list_files()
             if name == "read_file":
-                return self.read_file(str(args.get("path", "")))
+                return self.read_file(
+                    str(args.get("path", "")),
+                    start_line=_opt_int(args.get("start_line")),
+                    end_line=_opt_int(args.get("end_line")),
+                )
             if name == "write_file":
                 return self.write_file(
                     str(args.get("path", "")),
@@ -224,7 +240,13 @@ class KernelAgentTools:
         width = max(len(r) for r, _ in rows)
         return "\n".join(f"{r:<{width}}  {s:>9} B" for r, s in rows)
 
-    def read_file(self, path: str) -> str:
+    def read_file(
+        self,
+        path: str,
+        *,
+        start_line: int | None = None,
+        end_line: int | None = None,
+    ) -> str:
         target = self._resolve(path)
         if not target.is_file():
             raise ToolError(f"file not found: {path}")
@@ -232,10 +254,30 @@ class KernelAgentTools:
             data = target.read_bytes()
         except OSError as e:
             raise ToolError(f"read failed: {e}") from e
+
+        if start_line is not None or end_line is not None:
+            text = data.decode("utf-8", errors="replace")
+            lines = text.splitlines(keepends=True)
+            n = len(lines)
+            s = max((start_line or 1) - 1, 0)
+            e = min(end_line if end_line is not None else n, n)
+            if s >= e:
+                raise ToolError(
+                    f"empty slice: start_line={start_line}, end_line={end_line},"
+                    f" file has {n} lines"
+                )
+            return "".join(lines[s:e])
+
         if len(data) > MAX_READ_BYTES:
-            text = data[:MAX_READ_BYTES].decode("utf-8", errors="replace")
-            text += f"\n# ... truncated at {MAX_READ_BYTES} bytes ..."
-            return text
+            try:
+                n_lines = data.count(b"\n") + 1
+            except Exception:  # noqa: BLE001
+                n_lines = -1
+            kb = len(data) // 1024
+            raise ToolError(
+                f"File too large ({kb} KB, {n_lines} lines); pass start_line"
+                f" and end_line to read a slice. Cap is {MAX_READ_BYTES // 1024} KB."
+            )
         return data.decode("utf-8", errors="replace")
 
     def write_file(self, path: str, content: str) -> str:
@@ -335,6 +377,15 @@ class KernelAgentTools:
             f"path not in writable allowlist: {rel.as_posix()} "
             f"(allowed: {sorted(WRITABLE_FILES)} or workspace/...)"
         )
+
+
+def _opt_int(v: Any) -> int | None:
+    if v is None or v == "":
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def _last_json_object(text: str) -> str | None:
