@@ -1139,7 +1139,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         active_dtype = torch.float32
 
-    torch.manual_seed(int(_os.environ.get("KERNEL_SYNTH_SEED", "0")))
+    _seed_root = int(_os.environ.get("KERNEL_SYNTH_SEED", "0"))
+    torch.manual_seed(_seed_root)
+    # Seed every visible CUDA device too so multi-GPU runs are bit-stable.
+    # cuda.manual_seed_all is a no-op without a CUDA context, but it still
+    # works when CUDA is unavailable — guarded for clarity.
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(_seed_root)
 
     result: dict = {{
         "module": "{class_name}",
