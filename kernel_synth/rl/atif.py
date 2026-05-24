@@ -408,3 +408,52 @@ def validate(path_or_dict: Path | str | dict[str, Any]) -> tuple[bool, list[str]
             errors.append(f"{loc}: {err.get('msg', '')}")
         return False, errors
     return True, []
+
+
+def _cli(argv: list[str] | None = None) -> int:
+    """``python -m kernel_synth.rl.atif <trace.json> [<trace.json> ...]``.
+
+    Round-trip every trace JSON file through :func:`validate` and exit
+    non-zero on the first failure. Designed for CI use; prints a short
+    ``OK`` / ``FAIL`` line per file plus the validator errors.
+    """
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        prog="python -m kernel_synth.rl.atif",
+        description="Validate ATIF v1.7 trajectory JSON file(s).",
+    )
+    parser.add_argument(
+        "paths",
+        nargs="+",
+        help="One or more trace JSON file paths.",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Print only failures.",
+    )
+    args = parser.parse_args(argv)
+
+    rc = 0
+    for raw in args.paths:
+        path = Path(raw)
+        ok, errs = validate(path)
+        if ok:
+            if not args.quiet:
+                print(f"OK   {path}")
+        else:
+            rc = 1
+            print(f"FAIL {path}", file=sys.stderr)
+            for e in errs[:20]:
+                print(f"     · {e}", file=sys.stderr)
+            if len(errs) > 20:
+                print(f"     ... +{len(errs) - 20} more", file=sys.stderr)
+    return rc
+
+
+if __name__ == "__main__":
+    import sys
+
+    raise SystemExit(_cli(sys.argv[1:]))
