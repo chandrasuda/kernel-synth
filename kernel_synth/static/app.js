@@ -131,6 +131,7 @@
 
   async function loadHealth() {
     const dot = document.getElementById("health-dot");
+    const footer = document.getElementById("footer-build");
     try {
       const res = await fetch("/api/health");
       if (!res.ok) throw new Error(`/api/health ${res.status}`);
@@ -141,6 +142,10 @@
         dot.classList.add("ok");
         dot.title = `v${h.version} · ${h.n_repos} repos · ${h.n_envs} envs · started ${h.boot_time}`;
       }
+      if (footer) {
+        const built = h.boot_time ? formatDate(h.boot_time) : "—";
+        footer.textContent = `kernel-synth v${h.version} · built ${built}`;
+      }
     } catch (e) {
       state.health = null;
       if (dot) {
@@ -148,6 +153,7 @@
         dot.classList.add("err");
         dot.title = `health check failed: ${e.message}`;
       }
+      if (footer) footer.textContent = "health check failed";
     }
   }
 

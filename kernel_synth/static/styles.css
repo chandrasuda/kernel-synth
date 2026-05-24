@@ -726,6 +726,31 @@ code, pre, .mono { font-family: var(--mono); }
 /* Hidden utility */
 .hidden { display: none !important; }
 
+/* ------- footer ------- */
+.site-footer {
+  padding: 22px 32px 28px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--line);
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: baseline;
+  font-family: var(--mono);
+}
+.site-footer a {
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px dashed transparent;
+  transition: color 0.12s, border-color 0.12s;
+}
+.site-footer a:hover {
+  color: var(--text);
+  border-bottom-color: var(--line-strong);
+}
+.site-footer .dot { color: var(--line-strong); }
+
 /* ------- health pulse dot ------- */
 .health-dot {
   width: 10px;
