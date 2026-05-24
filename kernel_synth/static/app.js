@@ -427,7 +427,10 @@
             )}/traces/${encodeURIComponent(e.best_trace)}" target="_blank">${escape(
               e.best_trace
             )}</a>`
-          : `<span class="muted">no traces</span>`;
+          : `<span class="empty-hint" title="Run a rollout to populate this row">
+              no rollouts yet —
+              <code>python -m kernel_synth.scripts.rollout ${escape(e.slug)}</code>
+            </span>`;
         const tags = (e.tags || [])
           .slice(0, 3)
           .map((t) => `<span class="tag">${escape(t)}</span>`)
@@ -452,6 +455,13 @@
       })
       .join("");
 
+    const tableBody = tableRows
+      ? tableRows
+      : `<tr><td colspan="10" class="empty-row">
+           No envs match the current filter. Clear the active chip above to
+           see them all.
+         </td></tr>`;
+
     const table = `
       <div class="envs-table-wrap glass">
         <table class="envs-table">
@@ -469,7 +479,7 @@
               <th>best trace</th>
             </tr>
           </thead>
-          <tbody>${tableRows}</tbody>
+          <tbody>${tableBody}</tbody>
         </table>
       </div>
     `;
