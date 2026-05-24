@@ -36,11 +36,23 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Remove and re-clone repos even if a copy already exists.",
     )
+    parser.add_argument(
+        "--max-files",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Cap the buffer to the top-N nn.Module-heavy .py files before "
+            "the agent / heuristic walks it. Useful for monorepos where the "
+            "long tail is mostly tests / utils."
+        ),
+    )
     args = parser.parse_args(argv)
 
     config = PipelineConfig(
         data_dir=Path(args.data_dir).resolve(),
         use_llm=not args.no_llm,
+        max_files=args.max_files,
     )
     pipeline = Pipeline(config=config)
 

@@ -21,6 +21,10 @@ class PipelineConfig:
     data_dir: Path
     use_llm: bool = True
     max_agent_steps: int | None = None
+    # If set, only the top-N nn.Module-heavy files are kept in the buffer
+    # before the agent / heuristic walks it. Useful for monorepos where
+    # the long tail is mostly tests / utils / generated code.
+    max_files: int | None = None
 
     @property
     def clones_dir(self) -> Path:
@@ -50,6 +54,12 @@ class Pipeline:
             url, dest_root=self.config.clones_dir, force=force_reclone
         )
         buffer = build_buffer(repo_path)
+
+        if self.config.max_files is not None and self.config.max_files > 0:
+            # Buffers are already sorted by (-n_nn_modules, path); keep the
+            # densest N files so the agent / heuristic doesn't waste budget
+            # crawling utils + scripts on huge repos.
+            buffer.files = buffer.files[: self.config.max_files]
 
         selection_mode = "heuristic"
         candidates = []
