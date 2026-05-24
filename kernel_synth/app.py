@@ -112,6 +112,7 @@ def list_modules() -> JSONResponse:
                     "novelty_score": cand.novelty_score,
                     "tags": cand.tags,
                     "loc": cand.loc,
+                    "source_url": rec.source_file_url(cand.file_path),
                 }
             )
     out.sort(key=lambda r: (-r["novelty_score"], r["repo"]))

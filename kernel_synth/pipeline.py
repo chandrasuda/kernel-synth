@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .cloner import clone_repo, repo_full_name
+from .cloner import clone_repo, default_branch, repo_full_name
 from .code_buffer import build_buffer
 from .extractor import write_record
 from .harness import AgentHarness
@@ -81,11 +81,17 @@ class Pipeline:
             candidates = select_candidates(buffer, repo_root=repo_path)
             notes = "use_llm=False; heuristic mode"
 
+        branch = default_branch(repo_path)
+        if branch:
+            branch_note = f"default_branch={branch}"
+            notes = f"{notes} | {branch_note}".strip(" |") if notes else branch_note
+
         record = RepoRecord(
             url=url,
             name=full_name,
             local_path=str(repo_path),
             commit_sha=sha,
+            default_branch=branch,
             cloned_at=datetime.now(timezone.utc),
             n_python_files=buffer.n_files,
             n_loc=buffer.n_loc,

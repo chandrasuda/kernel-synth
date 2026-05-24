@@ -107,6 +107,42 @@ def _head_sha(repo_path: Path) -> str | None:
         return None
 
 
+def default_branch(repo_path: Path) -> str | None:
+    """Best-effort lookup of the remote's default branch (e.g. ``main``).
+
+    Uses ``git symbolic-ref refs/remotes/origin/HEAD`` first, which is set
+    on shallow clones. Falls back to the current branch name. Returns
+    ``None`` if both probes fail so callers can degrade gracefully.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo_path), "symbolic-ref",
+             "refs/remotes/origin/HEAD", "--short"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        ref = out.stdout.strip()
+        if ref.startswith("origin/"):
+            return ref.split("/", 1)[1] or None
+        return ref or None
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        pass
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-parse", "--abbrev-ref", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        name = out.stdout.strip()
+        return name or None
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+
+
 def assert_safe_remote(url: str) -> None:
     """Raise if ``url`` isn't a plain github.com URL."""
     parsed = urlparse(url)
