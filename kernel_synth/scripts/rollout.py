@@ -78,7 +78,23 @@ def main(argv: list[str] | None = None) -> int:
             "harness."
         ),
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help=(
+            "Emit the rollout result as a single JSON object on stdout "
+            "instead of the rich Panel/Table view. Suitable for piping into "
+            "jq / scripts."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    # When --json is on we suppress all decorative output so the JSON is
+    # the only thing on stdout. Errors still print to stderr via the
+    # console.print(file=sys.stderr) below.
+    if args.json:
+        global console
+        console = Console(stderr=True)
 
     envs_root = Path(args.envs_root).resolve()
     try:
@@ -94,13 +110,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 3
 
-    console.print(
-        Panel.fit(
-            f"[bold]{env_dir.name}[/bold]  ·  mode=[cyan]{args.mode}[/cyan]"
-            f"  ·  runs={args.runs}",
-            border_style="magenta",
+    if not args.json:
+        console.print(
+            Panel.fit(
+                f"[bold]{env_dir.name}[/bold]  ·  mode=[cyan]{args.mode}[/cyan]"
+                f"  ·  runs={args.runs}",
+                border_style="magenta",
+            )
         )
-    )
 
     if args.seed is not None:
         # Seed our own process for any in-process Python randomness, and
@@ -136,6 +153,21 @@ def main(argv: list[str] | None = None) -> int:
         final_runs=args.runs,
     )
 
+    ok, errs = validate(result.trace_path)
+
+    if args.json:
+        payload = {
+            "env": env_dir.name,
+            "mode": result.mode,
+            "reward": result.reward,
+            "components": result.components,
+            "trace_path": str(result.trace_path),
+            "atif_ok": ok,
+            "atif_errors": errs,
+        }
+        print(json.dumps(payload, indent=2, default=str))
+        return 0 if ok else 1
+
     table = Table(title="reward components", show_header=False, expand=False)
     table.add_column("k", style="cyan")
     table.add_column("v", style="bold")
@@ -153,7 +185,6 @@ def main(argv: list[str] | None = None) -> int:
         f"[dim]trace:[/dim] [green]{result.trace_path}[/green]"
     )
 
-    ok, errs = validate(result.trace_path)
     if ok:
         console.print("[green]ATIF validate: OK[/green]")
     else:
