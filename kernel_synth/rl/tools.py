@@ -90,7 +90,8 @@ class KernelAgentTools:
                 "Read the contents of a file inside the env folder. "
                 "Paths are relative to the env root; `..` is rejected. "
                 "For files larger than the 200 KB cap, pass start_line / "
-                "end_line (1-indexed, inclusive) to read a slice."
+                "end_line (1-indexed, inclusive) to read a slice, or "
+                "tighten max_bytes to read only the first N bytes."
             ),
             "parameters": {
                 "type": "object",
@@ -108,6 +109,15 @@ class KernelAgentTools:
                         "type": "integer",
                         "minimum": 1,
                         "description": "Last line of the slice (1-indexed, inclusive).",
+                    },
+                    "max_bytes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200_000,
+                        "description": (
+                            "Optional cap on the bytes returned. Defaults to "
+                            "200 KB (the hard ceiling); set lower for a quick peek."
+                        ),
                     },
                 },
                 "required": ["path"],
@@ -226,6 +236,7 @@ class KernelAgentTools:
                     str(args.get("path", "")),
                     start_line=_opt_int(args.get("start_line")),
                     end_line=_opt_int(args.get("end_line")),
+                    max_bytes=_opt_int(args.get("max_bytes")),
                 )
             if name == "write_file":
                 return self.write_file(
@@ -270,6 +281,7 @@ class KernelAgentTools:
         *,
         start_line: int | None = None,
         end_line: int | None = None,
+        max_bytes: int | None = None,
     ) -> str:
         target = self._resolve(path)
         if not target.is_file():
@@ -278,6 +290,15 @@ class KernelAgentTools:
             data = target.read_bytes()
         except OSError as e:
             raise ToolError(f"read failed: {e}") from e
+
+        # The caller-supplied ``max_bytes`` is always clamped to the hard
+        # ceiling so a chatty agent can't bypass the sandbox limit by
+        # asking for the moon.
+        effective_cap = MAX_READ_BYTES
+        if max_bytes is not None:
+            if max_bytes <= 0:
+                raise ToolError("max_bytes must be a positive integer")
+            effective_cap = min(int(max_bytes), MAX_READ_BYTES)
 
         if start_line is not None or end_line is not None:
             text = data.decode("utf-8", errors="replace")
@@ -290,9 +311,16 @@ class KernelAgentTools:
                     f"empty slice: start_line={start_line}, end_line={end_line},"
                     f" file has {n} lines"
                 )
-            return "".join(lines[s:e])
+            sliced = "".join(lines[s:e])
+            return _truncate_to_bytes(sliced, effective_cap)
 
-        if len(data) > MAX_READ_BYTES:
+        if len(data) > effective_cap:
+            if max_bytes is not None:
+                # Caller opted in to a peek: truncate silently at the byte
+                # boundary instead of erroring out.
+                return _truncate_to_bytes(
+                    data.decode("utf-8", errors="replace"), effective_cap
+                )
             try:
                 n_lines = data.count(b"\n") + 1
             except Exception:  # noqa: BLE001
@@ -300,7 +328,8 @@ class KernelAgentTools:
             kb = len(data) // 1024
             raise ToolError(
                 f"File too large ({kb} KB, {n_lines} lines); pass start_line"
-                f" and end_line to read a slice. Cap is {MAX_READ_BYTES // 1024} KB."
+                f" and end_line to read a slice, or set max_bytes to truncate."
+                f" Cap is {MAX_READ_BYTES // 1024} KB."
             )
         return data.decode("utf-8", errors="replace")
 
@@ -433,6 +462,24 @@ def _opt_int(v: Any) -> int | None:
         return int(v)
     except (TypeError, ValueError):
         return None
+
+
+def _truncate_to_bytes(text: str, max_bytes: int) -> str:
+    """Return ``text`` truncated so its UTF-8 encoding is <= ``max_bytes``.
+
+    Adds a clearly-marked sentinel line on truncation so the agent doesn't
+    silently treat a partial read as the full file.
+    """
+    if max_bytes <= 0:
+        return ""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    sentinel = "\n# ... [truncated by read_file max_bytes] ...\n"
+    s_bytes = sentinel.encode("utf-8")
+    budget = max(0, max_bytes - len(s_bytes))
+    head = encoded[:budget].decode("utf-8", errors="ignore")
+    return head + sentinel
 
 
 def _peek_trace(path: Path) -> tuple[str | None, float | None, int | None]:
