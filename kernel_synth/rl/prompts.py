@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .triton_examples import TRITON_SOFTMAX_SOURCE
+
 
 KERNEL_AGENT_SYSTEM_PROMPT = """\
 You are a kernel-engineering agent. Your job is to write **Triton** kernels
@@ -126,7 +128,13 @@ def triton_add(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 
 For reductions (e.g. rowwise softmax) the pattern is the same with
 `tl.max` / `tl.sum` over the BLOCK axis; keep one program per row and pick
-BLOCK >= the row width (padded with `-inf` / `0` via the mask).
+BLOCK >= the row width (padded with `-inf` / `0` via the mask). The full
+worked example below shows exactly this pattern — copy it as a starting
+point when the reference module includes any softmax / log-softmax.
+
+```python
+""" + TRITON_SOFTMAX_SOURCE + """\
+```
 
 Start. Don't deliberate.
 """
