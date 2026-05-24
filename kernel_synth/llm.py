@@ -88,11 +88,16 @@ class LLMClient:
         messages: list[dict],
         tools: list[dict],
         max_tokens: int = 4096,
+        temperature: float | None = None,
     ) -> ChatResponse:
         if self.provider == "anthropic":
-            fn = lambda: self._chat_anthropic(system, messages, tools, max_tokens)
+            fn = lambda: self._chat_anthropic(
+                system, messages, tools, max_tokens, temperature
+            )
         else:
-            fn = lambda: self._chat_openai(system, messages, tools, max_tokens)
+            fn = lambda: self._chat_openai(
+                system, messages, tools, max_tokens, temperature
+            )
         return self._with_retry(fn)
 
     def _with_retry(self, fn: Callable[[], ChatResponse]) -> ChatResponse:
@@ -123,6 +128,7 @@ class LLMClient:
         messages: list[dict],
         tools: list[dict],
         max_tokens: int,
+        temperature: float | None = None,
     ) -> ChatResponse:
         anth_tools = [
             {
@@ -132,12 +138,16 @@ class LLMClient:
             }
             for t in tools
         ]
+        extra: dict[str, Any] = {}
+        if temperature is not None:
+            extra["temperature"] = float(temperature)
         resp = self._client.messages.create(
             model=self.model,
             system=system,
             messages=messages,
             tools=anth_tools,
             max_tokens=max_tokens,
+            **extra,
         )
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
@@ -162,6 +172,7 @@ class LLMClient:
         messages: list[dict],
         tools: list[dict],
         max_tokens: int,
+        temperature: float | None = None,
     ) -> ChatResponse:
         oai_msgs = [{"role": "system", "content": system}]
         for m in messages:
@@ -177,11 +188,15 @@ class LLMClient:
             }
             for t in tools
         ]
+        extra: dict[str, Any] = {}
+        if temperature is not None:
+            extra["temperature"] = float(temperature)
         resp = self._client.chat.completions.create(
             model=self.model,
             messages=oai_msgs,
             tools=oai_tools,
             max_tokens=max_tokens,
+            **extra,
         )
         choice = resp.choices[0]
         msg = choice.message

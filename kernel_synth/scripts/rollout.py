@@ -87,6 +87,15 @@ def main(argv: list[str] | None = None) -> int:
             "jq / scripts."
         ),
     )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help=(
+            "Sampling temperature passed to the LLM (agent mode). "
+            "Unset uses the provider default."
+        ),
+    )
     args = parser.parse_args(argv)
 
     # When --json is on we suppress all decorative output so the JSON is
@@ -151,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         max_steps=args.max_steps,
         model_label=args.model,
         final_runs=args.runs,
+        temperature=args.temperature,
     )
 
     ok, errs = validate(result.trace_path)

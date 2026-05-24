@@ -110,6 +110,7 @@ def rollout(
     model_label: str | None = None,
     final_runs: int = 20,
     benchmark_timeout_s: float = 120.0,
+    temperature: float | None = None,
 ) -> RolloutResult:
     """Run one rollout against the env at ``env_dir`` and persist the trace.
 
@@ -153,6 +154,7 @@ def rollout(
             max_tool_calls=max_tool_calls,
             model_label=model_label,
             final_runs=final_runs,
+            temperature=temperature,
         )
     raise ValueError(f"unknown rollout mode: {mode!r}")
 
@@ -293,6 +295,7 @@ def _rollout_agent(
     max_tool_calls: int,
     model_label: str | None,
     final_runs: int,
+    temperature: float | None = None,
 ) -> RolloutResult:
     obs0 = env.reset()
     builder = _new_builder(
@@ -317,6 +320,7 @@ def _rollout_agent(
                 system=KERNEL_AGENT_SYSTEM_PROMPT,
                 messages=messages,
                 tools=KernelAgentTools.TOOL_SCHEMAS,
+                temperature=temperature,
             )
         except Exception as e:  # noqa: BLE001
             redacted = _redact_secrets(repr(e))
