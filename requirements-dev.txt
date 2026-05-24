@@ -1,0 +1,10 @@
+# Developer-only dependencies. None of these are required to run
+# kernel-synth; install with:
+#
+#     uv pip install -r requirements-dev.txt
+#
+# Pin upper bounds to the next major so a routine ``pip install -U`` can't
+# silently break the test suite or the milestone report extractor.
+pypdf>=6.0,<7.0
+pytest>=8.3,<9.0
+ruff>=0.6,<1.0
