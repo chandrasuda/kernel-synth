@@ -10,6 +10,7 @@ Per-step reward is always 0 — the reward is sparse and computed in
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -66,6 +67,7 @@ class KernelEnv:
         self._reference_source: str | None = None
         self._inputs_source: str | None = None
         self._class_name: str | None = None
+        self._seed: int | None = None
 
         self._load_env_metadata()
         self._cache_originals()
@@ -81,11 +83,24 @@ class KernelEnv:
     def baseline(self) -> dict[str, Any] | None:
         return self._baseline
 
-    def reset(self) -> dict[str, Any]:
+    def reset(self, *, seed: int | None = None) -> dict[str, Any]:
         """Restore solution + triton_kernels to originals, clear workspace,
-        run a baseline benchmark, and return the initial observation."""
+        run a baseline benchmark, and return the initial observation.
+
+        Parameters
+        ----------
+        seed : int | None
+            If provided, propagated to the benchmark subprocess via the
+            ``KERNEL_SYNTH_SEED`` env var so the same random module
+            init / input tensors are used across this rollout's baseline
+            run AND any subsequent ``run_benchmark`` calls the agent
+            makes. Useful for making A/B comparisons reproducible.
+        """
         self._restore_originals()
         self._ensure_workspace()
+        if seed is not None:
+            os.environ["KERNEL_SYNTH_SEED"] = str(int(seed))
+            self._seed = int(seed)
         self.tools = KernelAgentTools(
             self.env_dir,
             python=self.python,
@@ -103,6 +118,7 @@ class KernelEnv:
             "solution_ms": _f(baseline.get("solution_ms")),
             "correct": bool(baseline.get("correct", False)),
             "baseline_raw": baseline,
+            "seed": self._seed,
         }
 
     def step(self, tool_call: dict[str, Any]) -> StepResult:
