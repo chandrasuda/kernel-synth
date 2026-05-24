@@ -72,3 +72,25 @@ def test_non_finite_timings_are_treated_as_missing() -> None:
     # Cannot compute progress -> defaults to 0.0.
     assert r["reward"] == 0.0
     assert r["components"]["progress"] is None
+
+
+def test_compute_reward_returns_typed_keys() -> None:
+    """RewardResult contract: ``reward`` is a float and every component
+    documented in the TypedDict is present in the output (even when None)."""
+    r = compute_reward(correct=True, eager_ms=4.0, compile_ms=2.0, solution_ms=2.0)
+    assert isinstance(r["reward"], float)
+    expected = {
+        "correct",
+        "eager_ms",
+        "compile_ms",
+        "solution_ms",
+        "progress",
+        "eager_speedup",
+        "compile_ratio",
+        "wrong_penalty",
+        "progress_clip",
+        "compile_denominator_degenerate",
+    }
+    missing = expected - set(r["components"].keys())
+    assert not missing, f"missing reward component keys: {sorted(missing)}"
+    assert r["components"]["progress_clip"] == [PROGRESS_MIN, PROGRESS_MAX]
