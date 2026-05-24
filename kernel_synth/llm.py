@@ -202,11 +202,13 @@ class LLMClient:
         msg = choice.message
         tool_calls: list[ToolCall] = []
         for tc in msg.tool_calls or []:
-            try:
-                args = json.loads(tc.function.arguments or "{}")
-            except json.JSONDecodeError:
-                args = {"_raw": tc.function.arguments}
-            tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, arguments=args))
+            tool_calls.append(
+                ToolCall(
+                    id=tc.id,
+                    name=tc.function.name,
+                    arguments=_parse_tool_arguments(tc.function.arguments),
+                )
+            )
         stop = "tool_use" if tool_calls else "end"
         return ChatResponse(
             stop_reason=stop,
@@ -224,6 +226,32 @@ def _auto_provider() -> str:
     raise LLMUnavailable(
         "No LLM provider available. Set ANTHROPIC_API_KEY or OPENAI_API_KEY."
     )
+
+
+def _parse_tool_arguments(raw: Any) -> dict[str, Any]:
+    """Coerce a tool-call ``arguments`` payload into a Python dict.
+
+    Provider quirks we handle:
+      * OpenAI returns ``arguments`` as a JSON-encoded string (sometimes ``None``).
+      * Anthropic returns a dict directly; pass it through unchanged.
+      * Either provider can occasionally hand back invalid JSON when the
+        model stops mid-stream — preserve the raw text under ``_raw`` so
+        the tool dispatcher gets a clean dict but the upstream error is
+        still observable for debugging.
+    """
+    if raw is None or raw == "":
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {"_raw": raw}
+        if isinstance(parsed, dict):
+            return parsed
+        return {"_value": parsed}
+    return {"_raw": str(raw)}
 
 
 def _anthropic_msg_to_openai(m: dict) -> list[dict]:
