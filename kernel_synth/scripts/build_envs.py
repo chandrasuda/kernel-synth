@@ -3,6 +3,8 @@
 Usage:
     python -m kernel_synth.scripts.build_envs              # build all
     python -m kernel_synth.scripts.build_envs --out ./envs # custom output dir
+    python -m kernel_synth.scripts.build_envs --only openai/whisper
+    python -m kernel_synth.scripts.build_envs --only mamba --only whisper
 """
 
 from __future__ import annotations
@@ -32,6 +34,17 @@ def main(argv: list[str] | None = None) -> int:
         default="./envs",
         help="Output root for RL env folders (default ./envs).",
     )
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="REPO",
+        help=(
+            "Only rebuild envs for repos whose ``owner/repo`` (or just "
+            "``repo``) name matches. Pass multiple times to union. Matching "
+            "is case-insensitive substring."
+        ),
+    )
     args = parser.parse_args(argv)
 
     extracted_root = Path(args.extracted_dir).resolve()
@@ -44,6 +57,19 @@ def main(argv: list[str] | None = None) -> int:
             f"Run `python -m kernel_synth.scripts.seed_repos` first.[/red]"
         )
         return 2
+
+    if args.only:
+        filters = [f.lower() for f in args.only]
+        records = [
+            r for r in records
+            if any(f in r.name.lower() for f in filters)
+        ]
+        if not records:
+            console.print(
+                f"[red]--only filter {args.only} matched 0 of the available "
+                f"repos.[/red]"
+            )
+            return 2
 
     console.print(
         f"Building envs from [bold]{len(records)}[/bold] repos into "
