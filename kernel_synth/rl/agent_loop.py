@@ -94,12 +94,19 @@ AgentRollout = RolloutResult
 # Public API
 
 
+# Independent cap so a single chatty turn can't fire 100 tool calls and
+# blow past the per-turn step budget. Tuned to comfortably accommodate
+# realistic kernel-engineering rollouts (read + write + benchmark loops).
+DEFAULT_MAX_TOOL_CALLS = 80
+
+
 def rollout(
     env_dir: Path | str,
     *,
     mode: RolloutMode = "baseline",
     llm: LLMClient | None = None,
     max_steps: int = 20,
+    max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS,
     model_label: str | None = None,
     final_runs: int = 20,
     benchmark_timeout_s: float = 120.0,
@@ -116,6 +123,10 @@ def rollout(
         Required only for ``mode="agent"``.
     max_steps : int
         Hard cap on LLM-driven turns in ``agent`` mode.
+    max_tool_calls : int
+        Hard cap on total tool invocations across the rollout, independent
+        of ``max_steps``. Defends against a chatty turn issuing dozens of
+        tool calls.
     model_label : str | None
         Optional override for the agent's ``model_name`` (otherwise pulled
         from ``llm.model``).
@@ -139,6 +150,7 @@ def rollout(
             env,
             llm=llm,
             max_steps=max_steps,
+            max_tool_calls=max_tool_calls,
             model_label=model_label,
             final_runs=final_runs,
         )
@@ -278,6 +290,7 @@ def _rollout_agent(
     *,
     llm: LLMClient,
     max_steps: int,
+    max_tool_calls: int,
     model_label: str | None,
     final_runs: int,
 ) -> RolloutResult:
@@ -295,6 +308,8 @@ def _rollout_agent(
         {"role": "user", "content": [{"type": "text", "text": obs0["prompt"]}]}
     ]
     llm_call_count = 0
+    total_tool_calls = 0
+    tool_cap_hit = False
 
     for _turn in range(max_steps):
         try:
@@ -380,9 +395,20 @@ def _rollout_agent(
             llm_call_count=llm_call_count,
         )
 
+        total_tool_calls += len(resp.tool_calls)
         if not resp.tool_calls:
             break
         if finish_called:
+            break
+        if total_tool_calls >= max_tool_calls:
+            tool_cap_hit = True
+            builder.add_step(
+                source="user",
+                message=(
+                    f"(max_tool_calls={max_tool_calls} reached after "
+                    f"{total_tool_calls} calls — finalizing automatically)"
+                ),
+            )
             break
 
         messages.append({"role": "user", "content": tool_results_for_next})
@@ -395,10 +421,13 @@ def _rollout_agent(
             ),
         )
 
-    return _finalize(
+    result = _finalize(
         env, builder, mode="agent", final_runs=final_runs,
         llm_call_count=llm_call_count,
     )
+    if tool_cap_hit:
+        result.components.setdefault("tool_cap_hit", True)
+    return result
 
 
 # ---------------------------------------------------------------------------
