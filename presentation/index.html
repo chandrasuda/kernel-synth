@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Continuum — Agents that keep learning · SymSys 161</title>
+<meta name="description" content="Continual test-time reinforcement learning for deployed agents, with a staleness-aware off-policy update. Chandra Suda & Aaditya Nalawade, SymSys 161 final." />
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%233340c8' stroke-width='3'/%3E%3Ccircle cx='27' cy='16' r='4' fill='%23c0531a'/%3E%3C/svg%3E" />
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="wordmark"><span class="dot"></span> Continuum</div>
+<nav class="dots" id="dots" aria-label="Section navigation"></nav>
+<div class="keyhint" id="keyhint"><span>Navigate</span> <kbd>&larr;</kbd> <kbd>&rarr;</kbd> <span>or scroll</span></div>
+
+<main>
+
+  <!-- ============================ HERO ============================ -->
+  <section class="slide hero" id="s-hero" data-label="Title">
+    <canvas id="heroCanvas"></canvas>
+    <div class="wrap">
+      <div class="eyebrow reveal">SymSys 161 · Final Presentation · Spring 2026</div>
+      <h1 class="reveal d1">Agents that <span class="grad">keep learning</span> after they ship.</h1>
+      <p class="sub reveal d2">
+        Today's agents are frozen the moment they deploy. This quarter we built
+        <strong>Continuum</strong> &mdash; a test-time asynchronous-RL loop that lets a deployed agent
+        improve from its own experience &mdash; and <strong>SDPO</strong>, a staleness-aware update that
+        makes that loop stable.
+      </p>
+      <div class="authors reveal d3">
+        <span class="names">Chandra Suda &nbsp;·&nbsp; Aaditya Nalawade</span>
+        <span class="meta">Stanford · Symbolic Systems</span>
+        <span class="meta"><span class="pulse-dot" style="display:inline-block;vertical-align:middle"></span> live demo &amp; code at the end</span>
+      </div>
+      <div class="scroll-cue reveal d4"><span class="arrow">&darr;</span> a 6-minute walk through the quarter</div>
+    </div>
+  </section>
+
+  <!-- ============================ PROBLEM ============================ -->
+  <section class="slide" id="s-problem" data-label="The problem">
+    <div class="wrap">
+      <div class="section-no reveal">01 — The problem</div>
+      <div class="with-margin">
+        <div class="col">
+          <h2 class="head reveal d1">A deployed agent is a snapshot of a world that won't hold still.</h2>
+          <p class="lede reveal d2">
+            The instant an agent ships, its weights stop changing. The world it works in does not.
+            A coding agent meets a new library version; a support bot meets a product it has never seen;
+            a research agent meets a codebase that changed last night.
+          </p>
+          <div class="spacer-m"></div>
+          <p class="reveal d2">
+            The expensive part of <strong>knowledge work</strong> &mdash; code, customer support, ops, analysis &mdash;
+            is exactly the part that demands <em>adaptation</em>: understanding an evolving system, a customer's
+            history, a domain's jargon. In-context tricks help, but they don't <em>compound</em>. Nothing the
+            agent figures out today survives to tomorrow.
+          </p>
+          <p class="reveal d3">
+            <strong>Continual learning / test-time training</strong> is the missing piece: let the agent keep
+            improving from its own deployment experience, not just from a frozen pre-training run.
+          </p>
+        </div>
+        <div>
+          <div class="margin reveal d2">
+            <h4>Why this matters for SymSys 161</h4>
+            The defensible products in knowledge work aren't the ones that answer a static benchmark &mdash;
+            they're the ones that get sharper on <em>your</em> codebase, <em>your</em> customers, the longer
+            you use them.
+          </div>
+          <div class="margin reveal d3">
+            <h4>Why now</h4>
+            Agentic products already emit exactly what RL needs &mdash; rollouts plus outcomes &mdash; as a
+            byproduct of doing their job. The training data is free; we just have to close the loop.
+          </div>
+        </div>
+      </div>
+      <div class="spacer-l"></div>
+      <div class="driftbox reveal d2" id="driftbox" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- ============================ INFRA ============================ -->
+  <section class="slide" id="s-infra" data-label="The system">
+    <div class="wrap">
+      <div class="section-no reveal">02 — What we built</div>
+      <h2 class="head reveal d1">Continuum: test-time asynchronous RL.</h2>
+      <p class="lede reveal d2 col">
+        An agent &mdash; coding agent, support bot, ops agent &mdash; runs in a sandbox and stores every
+        rollout with its outcome. We pool those rollouts across many instances and run an
+        <strong>always-on RL trainer</strong> that pushes improved weights back to the fleet.
+      </p>
+      <div class="spacer-m"></div>
+
+      <div class="loop-stage reveal d2" id="loopStage"></div>
+      <div class="legend reveal d3">
+        <span><span class="sw" style="background:var(--accent)"></span> rollout + reward, streaming</span>
+        <span><span class="sw" style="background:var(--rust)"></span> updated weights, broadcast</span>
+        <span><span class="sw" style="background:var(--good)"></span> reward signal</span>
+      </div>
+
+      <div class="spacer-l"></div>
+      <div class="grid c3">
+        <div class="card reveal d1">
+          <h3>Self-graded rollouts</h3>
+          <p>In <strong>verifiable</strong> domains (code, kernels, math) the agent writes its own unit tests and
+            grades itself at test time. The reward needs no human in the loop.</p>
+        </div>
+        <div class="card reveal d2">
+          <h3>Human-graded rollouts</h3>
+          <p>In <strong>unverifiable</strong> domains (support, writing) we collect user feedback or label a
+            batch before training. Same buffer, different reward source.</p>
+        </div>
+        <div class="card reveal d3">
+          <h3>Modal sandboxes</h3>
+          <p>The fleet and the trainer run on <strong>Modal</strong> sandboxes &mdash; cheap parallel rollout
+            collection, decoupled from a continuously-updating learner.</p>
+        </div>
+      </div>
+
+      <div class="spacer-m"></div>
+      <div class="callout reveal d2 col">
+        The catch: "always-on" means <strong>off-policy</strong>. By the time the trainer sees a rollout,
+        the policy has already moved on. That gap &mdash; <em>staleness</em> &mdash; is what breaks naive
+        async RL, and it's what SDPO is for.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ SDPO / STALENESS ============================ -->
+  <section class="slide" id="s-sdpo" data-label="SDPO">
+    <div class="wrap">
+      <div class="section-no reveal">03 — The staleness problem &amp; SDPO</div>
+      <h2 class="head reveal d1">Stale rollouts make updates explode. We clip <em>where it matters</em>.</h2>
+      <p class="lede reveal d2 col">
+        Off-policy, the importance ratio <span class="mono">r<sub>t</sub> = &pi;<sub>new</sub>/&pi;<sub>old</sub></span>
+        drifts from&nbsp;1. Its variance is heavy-tailed: a few tokens dominate the gradient and training
+        collapses. Every fix trades a little bias for a lot less variance.
+      </p>
+      <div class="spacer-m"></div>
+
+      <div class="spectrum reveal d2">
+        <div class="method">
+          <div class="tag">baseline A</div>
+          <h4>KL penalty</h4>
+          <p>Pull &pi;<sub>new</sub> toward &pi;<sub>old</sub> globally. Blunt &mdash; it pays a price even for
+            drift that was perfectly safe.</p>
+        </div>
+        <div class="method">
+          <div class="tag">baseline B</div>
+          <h4>Ratio clipping (PPO)</h4>
+          <p>Clip <span class="mono">r<sub>t</sub></span> to a <em>flat</em> <span class="mono">[1&minus;&epsilon;, 1+&epsilon;]</span>.
+            The "Trajectory" recipe: one knob, conservative <em>everywhere</em>.</p>
+        </div>
+        <div class="method">
+          <div class="tag">baseline C</div>
+          <h4>Advantage clipping</h4>
+          <p>Bound the advantage instead of the ratio. Stabilizes magnitude but ignores <em>which</em> tokens
+            are actually risky.</p>
+        </div>
+        <div class="method ours">
+          <div class="badge">ours</div>
+          <div class="tag">SDPO</div>
+          <h4>Entropy-scaled clip</h4>
+          <p>A <em>per-token</em> threshold that tightens where the teacher is confident and loosens where it
+            isn't. Conservative where it matters, permissive where it doesn't.</p>
+        </div>
+      </div>
+
+      <div class="spacer-l"></div>
+
+      <div class="with-margin">
+        <div class="col">
+          <div class="eq-wrap reveal d1">
+            <div class="eq">
+              <span class="var">&epsilon;</span><sub>t</sub>
+              <span>=</span>
+              <span class="var">&epsilon;</span><sub>0</sub>
+              <span>·</span>
+              <span class="paren">(</span>
+              <span class="frac">
+                <span class="num"><span class="var">H</span><sub>t</sub></span>
+                <span class="den"><span class="var">H</span><sub>mean</sub></span>
+              </span>
+              <span class="paren">)</span><sup class="var">&alpha;</sup>
+            </div>
+            <div class="eq2">
+              then clip <span class="var">r</span><sub>t</sub> to
+              [ 1 &minus; <span class="var">&epsilon;</span><sub>t</sub> , &nbsp; 1 + <span class="var">&epsilon;</span><sub>t</sub> ]
+            </div>
+          </div>
+          <p class="reveal d2">
+            <span class="mono">H<sub>t</sub></span> is the teacher's entropy at token <em>t</em>;
+            <span class="mono">H<sub>mean</sub></span> is a running EMA of teacher entropy across recent
+            batches. Two knobs instead of one &mdash; but both are <em>derivable</em>:
+            <span class="mono">&epsilon;<sub>0</sub></span> is the average tolerance (match Trajectory's 0.2),
+            and <span class="mono">&alpha;</span> falls out of a variance-budget calculation &mdash; set it so the
+            expected variance contribution is <em>uniform</em> across the entropy distribution.
+          </p>
+          <p class="reveal d3">
+            <strong>Why it beats a flat clip.</strong> Trajectory prevents collapse by being conservative
+            everywhere. SDPO prevents collapse by being conservative <em>only</em> at peaked-teacher tokens
+            &mdash; the ones where a stale update actually does damage &mdash; and staying permissive elsewhere,
+            so we keep the off-policy data we can safely use.
+          </p>
+        </div>
+        <div>
+          <div class="margin reveal d2">
+            <h4>Two measurable wins</h4>
+            <strong>1.</strong> Lower seed-to-seed variance at any staleness <span class="mono">K</span> &mdash;
+            directly attacking Trajectory's pain point, the <span class="mono">0.10&ndash;0.45</span> eval band at
+            identical hyperparameters.<br><br>
+            <strong>2.</strong> Graceful accuracy preservation at <em>higher</em> <span class="mono">K</span> than a
+            flat clip can handle.
+          </div>
+        </div>
+      </div>
+
+      <div class="spacer-l"></div>
+      <div class="grid c2">
+        <div class="panel reveal d1">
+          <h4>Per-token clip threshold &mdash; flat vs. entropy-scaled</h4>
+          <div id="entropyPlot"></div>
+          <div class="controls">
+            <div class="control">
+              <label>&alpha; (entropy sensitivity) <b id="alphaVal">0.60</b></label>
+              <input type="range" id="alpha" min="0" max="1.5" step="0.05" value="0.6" />
+            </div>
+            <div class="control">
+              <label>&epsilon;&#8320; (avg tolerance) <b id="eps0Val">0.20</b></label>
+              <input type="range" id="eps0" min="0.05" max="0.35" step="0.01" value="0.20" />
+            </div>
+          </div>
+        </div>
+        <div class="panel reveal d2">
+          <h4>Seed-to-seed eval band at fixed K</h4>
+          <div id="variancePlot"></div>
+          <p class="muted" style="font-size:13.5px;margin-top:10px">
+            Each dot is one training seed. A flat clip leaves a wide spread; SDPO's variance budget collapses
+            it toward the top.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ RESULTS ============================ -->
+  <section class="slide" id="s-results" data-label="Results">
+    <div class="wrap">
+      <div class="section-no reveal">04 — Early results · LiveCodeBench (CS 224N)</div>
+      <h2 class="head reveal d1">We swapped the flat clip for SDPO &mdash; and the curve held.</h2>
+      <p class="lede reveal d2 col">
+        Our CS 224N project this quarter let us test the core idea in isolation: same asynchronous setup on
+        <strong>LiveCodeBench</strong>, change <em>only</em> the off-policy update. SDPO held accuracy at higher
+        staleness and tightened the seed-to-seed spread.
+      </p>
+      <div class="spacer-m"></div>
+
+      <div class="with-margin">
+        <div class="col">
+          <div class="panel reveal d1">
+            <h4>Accuracy vs. staleness K — flat clip vs. SDPO</h4>
+            <div id="accPlot"></div>
+          </div>
+        </div>
+        <div>
+          <div class="margin reveal d2">
+            <h4>Read it like this</h4>
+            Both methods match on-policy at low <span class="mono">K</span>. The flat clip falls off a cliff once
+            rollouts get stale; SDPO degrades gently, buying more asynchrony (= more throughput) at the same
+            accuracy.
+          </div>
+        </div>
+      </div>
+
+      <div class="spacer-m"></div>
+      <table class="tbl reveal d2">
+        <thead>
+          <tr><th>Setting (LiveCodeBench)</th><th>K=8</th><th>K=32</th><th>K=128</th><th>seed band</th></tr>
+        </thead>
+        <tbody id="resultsBody"><!-- filled by JS from RESULTS config --></tbody>
+      </table>
+      <p class="note-illustrative reveal d3">
+        Numbers shown are the placeholders in <code>app.js → RESULTS</code> for the talk &mdash; drop in the
+        measured values from the CS 224N run before presenting.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================ KERNELS ============================ -->
+  <section class="slide" id="s-kernels" data-label="Testbed">
+    <div class="wrap">
+      <div class="section-no reveal">05 — A fully-verifiable testbed: kernel synthesis</div>
+      <h2 class="head reveal d1">To stress the loop, we manufactured RL environments for GPU-kernel engineering.</h2>
+      <p class="lede reveal d2 col">
+        Kernels are the perfect petri dish for the verifiable arm of Continuum: the reward is
+        <strong>dense, cheap, and automatic</strong> &mdash; numerical correctness times speedup. So we built
+        <strong>kernel-synth</strong>, a factory that turns real GitHub repos into kernel-writing RL tasks.
+      </p>
+      <div class="spacer-m"></div>
+
+      <div class="pipe reveal d2">
+        <div class="pstep"><div class="n">01</div><h4>Clone</h4><p>Shallow-clone a public repo, read-only.</p></div>
+        <div class="pstep"><div class="n">02</div><h4>Extract</h4><p>Pick <em>unique</em> nn.Modules &mdash; novel mechanisms, not vanilla attention.</p></div>
+        <div class="pstep"><div class="n">03</div><h4>Environment</h4><p>Emit a self-contained RL env: reference, inputs, harness, reward.</p></div>
+        <div class="pstep"><div class="n">04</div><h4>Agent writes Triton</h4><p>A coding agent writes a Triton kernel in a sandbox.</p></div>
+        <div class="pstep"><div class="n">05</div><h4>Reward</h4><p>Correctness &times; speedup, scored against a <span class="mono">torch.compile</span> ceiling.</p></div>
+      </div>
+
+      <div class="spacer-l"></div>
+      <div class="with-margin">
+        <div class="col">
+          <h3 class="reveal d1" style="font-size:22px;margin:0 0 10px">The reward spectrum</h3>
+          <p class="reveal d2">
+            Eager PyTorch is the floor; <span class="mono">torch.compile</span> is the expert ceiling. The agent
+            is rewarded for how far it closes that gap &mdash; and bonus beyond it.
+          </p>
+          <div class="reward-bar reveal d2" id="rewardBar">
+            <div class="reward-track"></div>
+            <div class="reward-tick" style="left:4%"><span class="cap">eager (0&times;)</span></div>
+            <div class="reward-tick" style="left:78%"><span class="cap">torch.compile (1.0)</span></div>
+            <div class="reward-marker" id="rewardMarker" style="left:4%"></div>
+          </div>
+        </div>
+        <div>
+          <div class="margin reveal d2">
+            <h4>Why this closes the loop</h4>
+            Every kernel attempt is a self-graded rollout stored as a <strong>Harbor / ATIF</strong>
+            trajectory &mdash; the exact format the Continuum trainer consumes. The testbed <em>is</em> the
+            verifiable arm of the system, end to end.
+          </div>
+        </div>
+      </div>
+
+      <div class="spacer-l"></div>
+      <div class="grid c3">
+        <div class="card reveal d1"><div class="kpi" data-count="6">0</div><p style="margin-top:6px">repos mined into tasks &mdash; mamba, vit, x-transformers, whisper, audiolm, local-attention</p></div>
+        <div class="card reveal d2"><div class="kpi" data-count="40">0<span class="unit">+</span></div><p style="margin-top:6px">self-contained kernel-engineering environments generated</p></div>
+        <div class="card reveal d3"><div class="kpi">ATIF<span class="unit"> v1.7</span></div><p style="margin-top:6px">trajectory format &mdash; rollouts feed straight into the async trainer</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ CLOSE ============================ -->
+  <section class="slide close" id="s-close" data-label="The bet">
+    <div class="wrap">
+      <div class="section-no reveal">06 — The bet</div>
+      <h2 class="head reveal d1">Agents that get better the more they're used.</h2>
+      <p class="lede reveal d2 col">
+        The data exhaust of agentic products &mdash; rollouts plus outcomes &mdash; becomes the training signal.
+        Asynchronous RL turns it into compounding improvement, and <strong>SDPO</strong> is what keeps that
+        loop from collapsing under its own staleness. For knowledge work, that's the difference between a tool
+        that <em>plateaus</em> and one that <em>climbs</em>.
+      </p>
+      <div class="spacer-l"></div>
+      <div class="grid c3">
+        <div class="card reveal d1">
+          <h3>What we shipped this quarter</h3>
+          <p>The Continuum loop on Modal, the SDPO update, a LiveCodeBench study (CS 224N), and the
+            kernel-synth verifiable testbed.</p>
+        </div>
+        <div class="card reveal d2">
+          <h3>What's next</h3>
+          <p>Derive &alpha; from the variance budget in closed form; scale rollout collection; bring the
+            unverifiable (support) arm online with human feedback.</p>
+        </div>
+        <div class="card reveal d3">
+          <h3>The team</h3>
+          <p>Chandra Suda &amp; Aaditya Nalawade. Built for SymSys 161, with results from our CS 224N
+            project.</p>
+        </div>
+      </div>
+      <div class="footer-meta reveal d3">
+        <span class="chip">github.com/chandrasuda/kernel-synth</span>
+        <span>Continuum · SDPO · kernel-synth</span>
+        <span>Chandra Suda &amp; Aaditya Nalawade · Spring 2026</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
