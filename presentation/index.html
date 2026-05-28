@@ -46,20 +46,15 @@
         <div class="col">
           <h2 class="head reveal d1">A deployed agent is a snapshot of a world that won't hold still.</h2>
           <p class="lede reveal d2">
-            The instant an agent ships, its weights stop changing. The world it works in does not.
-            A coding agent meets a new library version; a support bot meets a product it has never seen;
-            a research agent meets a codebase that changed last night.
+            The instant an agent ships, its weights stop changing. The world it works in does not &mdash;
+            a new library version, an unseen product, a codebase that changed last night.
           </p>
           <div class="spacer-m"></div>
-          <p class="reveal d2">
-            The expensive part of <strong>knowledge work</strong> &mdash; code, customer support, ops, analysis &mdash;
-            is exactly the part that demands <em>adaptation</em>: understanding an evolving system, a customer's
-            history, a domain's jargon. In-context tricks help, but they don't <em>compound</em>. Nothing the
-            agent figures out today survives to tomorrow.
-          </p>
           <p class="reveal d3">
-            <strong>Continual learning / test-time training</strong> is the missing piece: let the agent keep
-            improving from its own deployment experience, not just from a frozen pre-training run.
+            The expensive part of <strong>knowledge work</strong> demands <em>adaptation</em>, and in-context
+            tricks don't <em>compound</em>: nothing the agent learns today survives to tomorrow.
+            <strong>Continual learning</strong> is the missing piece &mdash; let the agent keep improving from
+            its own deployment experience.
           </p>
         </div>
         <div>
@@ -248,12 +243,11 @@
   <!-- ============================ RESULTS ============================ -->
   <section class="slide" id="s-results" data-label="Results">
     <div class="wrap">
-      <div class="section-no reveal">04 — Early results · LiveCodeBench (CS 224N)</div>
+      <div class="section-no reveal">04 — Early results · LiveCodeBench</div>
       <h2 class="head reveal d1">We swapped the flat clip for SDPO &mdash; and the curve held.</h2>
       <p class="lede reveal d2 col">
-        Our CS 224N project this quarter let us test the core idea in isolation: same asynchronous setup on
-        <strong>LiveCodeBench</strong>, change <em>only</em> the off-policy update. SDPO held accuracy at higher
-        staleness and tightened the seed-to-seed spread.
+        Same asynchronous setup on <strong>LiveCodeBench</strong>, changing <em>only</em> the off-policy update:
+        SDPO held accuracy at higher staleness and tightened the seed-to-seed spread.
       </p>
       <div class="spacer-m"></div>
 
@@ -282,8 +276,8 @@
         <tbody id="resultsBody"><!-- filled by JS from RESULTS config --></tbody>
       </table>
       <p class="note-illustrative reveal d3">
-        Numbers shown are the placeholders in <code>app.js → RESULTS</code> for the talk &mdash; drop in the
-        measured values from the CS 224N run before presenting.
+        Numbers shown are placeholders in <code>app.js → RESULTS</code> &mdash; drop in measured values
+        before presenting.
       </p>
     </div>
   </section>
@@ -349,16 +343,16 @@
       <h2 class="head reveal d1">Agents that get better the more they're used.</h2>
       <p class="lede reveal d2 col">
         The data exhaust of agentic products &mdash; rollouts plus outcomes &mdash; becomes the training signal.
-        Asynchronous RL turns it into compounding improvement, and <strong>SDPO</strong> is what keeps that
-        loop from collapsing under its own staleness. For knowledge work, that's the difference between a tool
-        that <em>plateaus</em> and one that <em>climbs</em>.
+        Asynchronous RL turns it into compounding improvement, and <strong>SDPO</strong> keeps that loop from
+        collapsing under its own staleness: the difference between a tool that <em>plateaus</em> and one that
+        <em>climbs</em>.
       </p>
       <div class="spacer-l"></div>
       <div class="grid c3">
         <div class="card reveal d1">
-          <h3>What we shipped this quarter</h3>
-          <p>The Continuum loop on Modal, the SDPO update, a LiveCodeBench study (CS 224N), and the
-            kernel-synth verifiable testbed.</p>
+          <h3>What we shipped</h3>
+          <p>The Continuum loop on Modal, the SDPO update, the LiveCodeBench study, and the kernel-synth
+            verifiable testbed.</p>
         </div>
         <div class="card reveal d2">
           <h3>What's next</h3>
@@ -367,8 +361,7 @@
         </div>
         <div class="card reveal d3">
           <h3>The team</h3>
-          <p>Chandra Suda &amp; Aaditya Nalawade. Built for SymSys 161, with results from our CS 224N
-            project.</p>
+          <p>Chandra Suda &amp; Aaditya Nalawade &mdash; SymSys 161, Spring 2026.</p>
         </div>
       </div>
       <div class="footer-meta reveal d3">

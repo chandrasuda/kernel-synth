@@ -6,7 +6,7 @@
 
   /* ---------------------------------------------------------------------
      EDIT ME — talk data. Replace the LiveCodeBench placeholders with the
-     measured CS 224N numbers before presenting.
+     measured numbers before presenting.
      accuracy arrays are aligned to K_AXIS = [1,2,4,8,16,32,64,128]
   --------------------------------------------------------------------- */
   const K_AXIS = [1, 2, 4, 8, 16, 32, 64, 128];

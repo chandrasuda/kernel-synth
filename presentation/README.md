@@ -2,8 +2,8 @@
 
 A single-page, animated research-pitch site for **Continuum** (test-time
 asynchronous RL for deployed agents) and **SDPO** (our staleness-aware
-off-policy update), with the LiveCodeBench (CS 224N) results and the
-kernel-synth verifiable testbed.
+off-policy update), with the LiveCodeBench results and the kernel-synth
+verifiable testbed.
 
 By Chandra Suda & Aaditya Nalawade.
 
@@ -30,7 +30,7 @@ any section.
    vs. human-graded rollouts).
 3. **SDPO** — the staleness problem and our entropy-scaled per-token clip vs.
    KL / ratio / advantage clipping. Interactive entropy plot + variance band.
-4. **Results** — LiveCodeBench (CS 224N): accuracy held at higher staleness.
+4. **Results** — LiveCodeBench: accuracy held at higher staleness.
 5. **Kernels** — kernel-synth as the fully-verifiable testbed.
 6. **The bet** — agents that improve the more they're used.
 
@@ -38,7 +38,7 @@ any section.
 
 All talk numbers live at the top of `app.js` in the `RESULTS` object
 (accuracy-vs-K curves, the results table). **Replace the LiveCodeBench
-placeholders with the measured CS 224N numbers before presenting.**
+placeholders with the measured numbers before presenting.**
 
 ## Files
 
