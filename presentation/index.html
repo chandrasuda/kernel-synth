@@ -243,41 +243,72 @@
   <section class="slide" id="s-results" data-label="Results">
     <div class="wrap">
       <div class="section-no reveal">04 — LiveCodeBench</div>
-      <h2 class="head reveal d1">We swapped the flat clip for SDPO &mdash; and the curve held.</h2>
+      <h2 class="head reveal d1">Verifier-only self-improvement: +6 points, no golden solutions.</h2>
       <p class="lede reveal d2 col">
-        Same asynchronous setup on <strong>LiveCodeBench</strong>, changing <em>only</em> the off-policy update:
-        SDPO held accuracy at higher staleness and tightened the seed-to-seed spread.
+        On <strong>LiveCodeBench</strong>, SDPO lets a 7B model improve from its own test-case feedback alone
+        &mdash; no golden solutions, no demonstrations. The best setting lifts solve rate
+        <strong>32% &rarr; 38%</strong>; deeper recursion and a smaller model show where it breaks.
       </p>
       <div class="spacer-m"></div>
 
-      <div class="with-margin">
-        <div class="col">
-          <div class="panel reveal d1">
-            <h4>Accuracy vs. staleness K — flat clip vs. SDPO</h4>
-            <div id="accPlot"></div>
-          </div>
+      <div class="grid c2">
+        <div class="panel reveal d1">
+          <h4>Solve rate &mdash; 7B, N=4 (best)</h4>
+          <div id="solveBars"></div>
         </div>
-        <div>
-          <div class="margin reveal d2">
-            <h4>Read it like this</h4>
-            Both methods match on-policy at low <span class="mono">K</span>. The flat clip falls off a cliff once
-            rollouts get stale; SDPO degrades gently, buying more asynchrony (= more throughput) at the same
-            accuracy.
-          </div>
+        <div class="panel reveal d2">
+          <h4>The paradox of depth &mdash; solve rate vs. recursion</h4>
+          <div id="paradoxPlot"></div>
+          <p class="muted" style="font-size:13.5px;margin-top:10px">
+            More recursive attempts raise test-time recovery (84% "perfects" at N=32) but <em>lower</em> held-out
+            solve rate &mdash; recursive patching overfits.
+          </p>
         </div>
       </div>
 
-      <div class="spacer-m"></div>
-      <table class="tbl reveal d2">
-        <thead>
-          <tr><th>Setting (LiveCodeBench)</th><th>K=8</th><th>K=32</th><th>K=128</th><th>seed band</th></tr>
-        </thead>
-        <tbody id="resultsBody"><!-- filled by JS from RESULTS config --></tbody>
-      </table>
-      <p class="note-illustrative reveal d3">
-        Numbers shown are placeholders in <code>app.js → RESULTS</code> &mdash; drop in measured values
-        before presenting.
-      </p>
+      <div class="spacer-l"></div>
+      <div class="with-margin">
+        <div class="col">
+          <table class="tbl reveal d2">
+            <thead>
+              <tr><th>Configuration</th><th>Test-case acc</th><th>Solve rate</th><th>Correct</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Baseline &middot; Qwen2.5-7B</td><td>51.3%</td><td>32%</td><td>16/50</td></tr>
+              <tr class="grp"><td colspan="4">7B &middot; v1 (N=4)</td></tr>
+              <tr class="ours"><td class="sub">SDPO-only</td><td>55.9%</td><td>38%</td><td>19/50</td></tr>
+              <tr><td class="sub">RAG + SDPO</td><td>52.0%</td><td>34%</td><td>17/50</td></tr>
+              <tr class="grp"><td colspan="4">7B &middot; v2 (N=16)</td></tr>
+              <tr><td class="sub">SDPO-only</td><td>55.5%</td><td>30%</td><td>15/50</td></tr>
+              <tr><td class="sub">RAG + SDPO</td><td>47.6%</td><td>32%</td><td>16/50</td></tr>
+              <tr class="grp"><td colspan="4">7B &middot; v3 (N=32)</td></tr>
+              <tr><td class="sub">SDPO-only</td><td>53.0%</td><td>30%</td><td>15/50</td></tr>
+              <tr><td class="sub">RAG + SDPO</td><td>47.2%</td><td>28%</td><td>14/50</td></tr>
+              <tr class="grp"><td colspan="4">Qwen2.5-1.5B &mdash; below the capability threshold</td></tr>
+              <tr><td class="sub">Baseline</td><td>14.0%</td><td>14%</td><td>7/50</td></tr>
+              <tr><td class="sub">1.5B + SDPO</td><td>8.0%</td><td>8%</td><td>4/50</td></tr>
+              <tr><td class="sub">1.5B + RAG + SDPO</td><td>10.0%</td><td>10%</td><td>5/50</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="margin reveal d2">
+            <h4>Verifier-only works</h4>
+            +6 pp solve rate (32&rarr;38) with no golden solutions and no demonstrations &mdash; the model
+            teaches itself from a test-case verifier.
+          </div>
+          <div class="margin reveal d2">
+            <h4>SDPO &gt; RAG at this scale</h4>
+            With only ~20&ndash;30 stored lessons, retrieval lacks semantic density; a memory-scale issue, not a
+            conceptual one.
+          </div>
+          <div class="margin reveal d3">
+            <h4>Capability threshold</h4>
+            The 1.5B model <em>degrades</em> under the identical pipeline &mdash; self-distillation needs enough
+            base competence to bootstrap from.
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 

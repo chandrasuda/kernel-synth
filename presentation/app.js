@@ -5,20 +5,19 @@
   "use strict";
 
   /* ---------------------------------------------------------------------
-     EDIT ME — talk data. Replace the LiveCodeBench placeholders with the
-     measured numbers before presenting.
-     accuracy arrays are aligned to K_AXIS = [1,2,4,8,16,32,64,128]
+     Talk data — measured on LiveCodeBench (Qwen2.5-7B-Instruct).
   --------------------------------------------------------------------- */
-  const K_AXIS = [1, 2, 4, 8, 16, 32, 64, 128];
   const RESULTS = {
-    onpolicy: 0.452,                                                  // reference ceiling (dashed)
-    flat: [0.451, 0.449, 0.444, 0.430, 0.402, 0.331, 0.214, 0.118],  // flat clip (Trajectory)
-    sdpo: [0.453, 0.452, 0.450, 0.447, 0.439, 0.421, 0.388, 0.341],  // SDPO (ours)
-    rows: [
-      { name: "On-policy (reference)", k8: "0.45", k32: "0.45", k128: "\u2014", band: "\u00b10.01", ours: false },
-      { name: "Flat clip \u00b7 \u03b5=0.2 (Trajectory)", k8: "0.43", k32: "0.33", k128: "0.12", band: "0.10\u20130.45", ours: false },
-      { name: "SDPO \u00b7 entropy-scaled (ours)", k8: "0.45", k32: "0.42", k128: "0.34", band: "0.40\u20130.47", ours: true },
+    baselineSolve: 32,                       // 7B baseline solve rate (%)
+    // best config (7B, N=4): solve-rate bars
+    solveBars: [
+      { label: "Baseline", solve: 32, ours: false },
+      { label: "RAG+SDPO", solve: 34, ours: false },
+      { label: "SDPO-only", solve: 38, ours: true },
     ],
+    // paradox of depth — SDPO-only solve rate vs recursion depth N
+    paradoxN: [4, 16, 32],
+    paradoxSolve: [38, 30, 30],
   };
 
   /* ---------- concrete palette (SVG attrs don't resolve CSS var()) ------ */
@@ -214,17 +213,18 @@
     box(760, cy - 70, 200, 140, C.accentWash2, C.accent);
     txt(svg, 860, cy - 42, "Async RL trainer", { anchor: "middle", size: 16, weight: 600, fill: C.accentDeep, family: '"Iowan Old Style", Palatino, Georgia, serif' });
     txt(svg, 860, cy - 18, "SDPO update", { anchor: "middle", size: 13, weight: 700, fill: C.accent });
-    const core = el("circle", { cx: 860, cy: cy + 18, r: 16, fill: "none", stroke: C.accent, "stroke-width": 2 }, svg);
-    el("circle", { cx: 860, cy: cy + 18, r: 6, fill: C.accent }, svg);
-    txt(svg, 860, cy + 75, "staleness-aware \u00b7 always on", { anchor: "middle", size: 12, fill: C.muted });
+    const core = el("circle", { cx: 860, cy: cy + 14, r: 15, fill: "none", stroke: C.accent, "stroke-width": 2 }, svg);
+    el("circle", { cx: 860, cy: cy + 14, r: 6, fill: C.accent }, svg);
+    txt(svg, 860, cy + 98, "staleness-aware \u00b7 always on", { anchor: "middle", size: 12, fill: C.muted });
 
     // connectors
     const fwd1 = el("path", { d: `M 240 ${cy} L 405 ${cy}`, fill: "none", stroke: C.accent, "stroke-width": 2, "marker-end": "url(#arrowB)" }, svg);
     const fwd2 = el("path", { d: `M 595 ${cy} L 760 ${cy}`, fill: "none", stroke: C.accent, "stroke-width": 2, "marker-end": "url(#arrowB)" }, svg);
-    const back = el("path", { d: `M 860 ${cy - 70} C 860 60, 140 60, 140 ${cy - 70}`, fill: "none", stroke: C.rust, "stroke-width": 2, "marker-end": "url(#arrowR)" }, svg);
+    // return path: trainer -> back over the top -> down INTO the agent fleet box
+    const back = el("path", { d: `M 860 ${cy - 70} C 860 52, 140 52, 140 ${cy - 74}`, fill: "none", stroke: C.rust, "stroke-width": 2.5, "marker-end": "url(#arrowR)" }, svg);
     txt(svg, 322, cy - 12, "rollouts", { anchor: "middle", size: 12, weight: 600, fill: C.accent });
     txt(svg, 677, cy - 12, "rollouts", { anchor: "middle", size: 12, weight: 600, fill: C.accent });
-    txt(svg, 500, 50, "updated weights \u2192 broadcast to fleet", { anchor: "middle", size: 12, weight: 600, fill: C.rust });
+    txt(svg, 500, 42, "updated weights \u2192 back to the agent fleet", { anchor: "middle", size: 12, weight: 600, fill: C.rust });
 
     // traveling dots
     const movers = [];
@@ -335,48 +335,59 @@
     });
   };
 
-  /* ====================== Results: accuracy vs K ======================= */
-  ONVIEW.acc = function (host) {
+  /* ====================== Results: solve-rate bars ===================== */
+  ONVIEW.solveBars = function (host) {
     const W = 560, H = 300, svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%" }, host);
-    const padL = 44, padB = 44, padT = 18, padR = 14;
-    const xs = K_AXIS.map((k) => Math.log2(k)), xmin = Math.min(...xs), xmax = Math.max(...xs);
-    const xOf = (k) => padL + ((Math.log2(k) - xmin) / (xmax - xmin)) * (W - padL - padR);
-    const ymin = 0.05, ymax = 0.48, yOf = (a) => padT + (1 - (a - ymin) / (ymax - ymin)) * (H - padB - padT);
-    [0.1, 0.2, 0.3, 0.4].forEach((a) => {
-      el("line", { x1: padL, y1: yOf(a), x2: W - padR, y2: yOf(a), stroke: C.lineSoft }, svg);
-      txt(svg, padL - 8, yOf(a) + 3, a.toFixed(1), { anchor: "end", size: 11, fill: C.faint });
+    const padL = 44, padB = 54, padT = 26, ymax = 50;
+    const yOf = (v) => padT + (1 - v / ymax) * (H - padB - padT);
+    [0, 10, 20, 30, 40, 50].forEach((v) => {
+      el("line", { x1: padL, y1: yOf(v), x2: W - 16, y2: yOf(v), stroke: C.lineSoft }, svg);
+      txt(svg, padL - 8, yOf(v) + 3, v + "%", { anchor: "end", size: 11, fill: C.faint });
     });
-    K_AXIS.forEach((k) => txt(svg, xOf(k), H - padB + 16, String(k), { anchor: "middle", size: 11, fill: C.faint }));
-    txt(svg, W / 2, H - 8, "staleness  K  (policy lag, log scale)", { anchor: "middle", size: 11, fill: C.muted });
-    txt(svg, padL - 32, padT - 4, "pass@1", { size: 11, fill: C.faint });
-    el("line", { x1: padL, y1: yOf(RESULTS.onpolicy), x2: W - padR, y2: yOf(RESULTS.onpolicy), stroke: C.good, "stroke-dasharray": "4 4", "stroke-width": 1.2, opacity: 0.85 }, svg);
-    txt(svg, W - padR, yOf(RESULTS.onpolicy) - 5, "on-policy", { anchor: "end", size: 11, fill: C.good });
-    function line(data, color, label, labelY) {
-      let d = ""; K_AXIS.forEach((k, i) => (d += `${i === 0 ? "M" : "L"} ${xOf(k)} ${yOf(data[i])} `));
-      const p = el("path", { d, fill: "none", stroke: color, "stroke-width": 3, "stroke-linejoin": "round" }, svg);
-      const L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
-      requestAnimationFrame(() => { p.style.transition = "stroke-dashoffset 1.4s ease"; p.style.strokeDashoffset = 0; });
-      K_AXIS.forEach((k, i) => {
-        const c = el("circle", { cx: xOf(k), cy: yOf(data[i]), r: 3.5, fill: color, opacity: 0 }, svg);
-        setTimeout(() => { c.style.transition = "opacity .3s"; c.setAttribute("opacity", 1); }, 1400 + i * 40);
-      });
-      const t = txt(svg, xOf(K_AXIS[7]) - 4, labelY, label, { anchor: "end", size: 13, weight: 700, fill: color }); t.style.opacity = 0;
-      setTimeout(() => { t.style.transition = "opacity .4s"; t.style.opacity = 1; }, 1500);
-    }
-    const yOfLast = (arr) => padT + (1 - (arr[7] - ymin) / (ymax - ymin)) * (H - padB - padT);
-    line(RESULTS.sdpo, C.accent, "SDPO (ours)", yOfLast(RESULTS.sdpo) - 8);
-    line(RESULTS.flat, C.rust, "flat clip", yOfLast(RESULTS.flat) + 16);
+    txt(svg, padL - 30, padT - 8, "solve rate", { size: 11, fill: C.faint });
+    // baseline reference line
+    el("line", { x1: padL, y1: yOf(RESULTS.baselineSolve), x2: W - 16, y2: yOf(RESULTS.baselineSolve), stroke: C.faint, "stroke-dasharray": "4 4", "stroke-width": 1 }, svg);
+    const bars = RESULTS.solveBars, n = bars.length, bw = 78, gap = (W - padL - 16 - n * bw) / (n + 1);
+    bars.forEach((b, i) => {
+      const x = padL + gap + i * (bw + gap), color = b.ours ? C.accent : C.faint;
+      const r = el("rect", { x, y: yOf(0), width: bw, height: 0, rx: 6, fill: color, opacity: b.ours ? 1 : 0.5 }, svg);
+      const th = yOf(0) - yOf(b.solve); let t0 = null;
+      requestAnimationFrame(function gr(ts) { if (!t0) t0 = ts; const k = clamp((ts - t0) / 750, 0, 1); r.setAttribute("y", yOf(b.solve * k)); r.setAttribute("height", th * k); if (k < 1) requestAnimationFrame(gr); });
+      txt(svg, x + bw / 2, yOf(b.solve) - 8, b.solve + "%", { anchor: "middle", size: 15, weight: 700, fill: color });
+      txt(svg, x + bw / 2, H - padB + 22, b.label, { anchor: "middle", size: 12.5, weight: b.ours ? 700 : 500, fill: b.ours ? C.ink : C.muted });
+      if (b.ours) txt(svg, x + bw / 2, H - padB + 37, "ours", { anchor: "middle", size: 10, fill: C.accent });
+    });
+    txt(svg, W - 16, yOf(RESULTS.baselineSolve) - 5, "baseline", { anchor: "end", size: 11, fill: C.faint });
+    txt(svg, W - 16, padT + 2, "+6 pp", { anchor: "end", size: 13, weight: 700, fill: C.good });
   };
 
-  /* ====================== results table =============================== */
-  (function table() {
-    const body = $("#resultsBody"); if (!body) return;
-    RESULTS.rows.forEach((r) => {
-      const tr = document.createElement("tr"); if (r.ours) tr.className = "ours";
-      tr.innerHTML = `<td>${r.name}</td><td>${r.k8}</td><td>${r.k32}</td><td>${r.k128}</td><td>${r.band}</td>`;
-      body.appendChild(tr);
+  /* ====================== Results: paradox of depth =================== */
+  ONVIEW.paradox = function (host) {
+    const W = 560, H = 300, svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%" }, host);
+    const padL = 44, padB = 54, padT = 26, padR = 16;
+    const Ns = RESULTS.paradoxN, S = RESULTS.paradoxSolve;
+    const xOf = (i) => padL + (i / (Ns.length - 1)) * (W - padL - padR);
+    const ymin = 20, ymax = 42, yOf = (v) => padT + (1 - (v - ymin) / (ymax - ymin)) * (H - padB - padT);
+    [20, 25, 30, 35, 40].forEach((v) => {
+      el("line", { x1: padL, y1: yOf(v), x2: W - padR, y2: yOf(v), stroke: C.lineSoft }, svg);
+      txt(svg, padL - 8, yOf(v) + 3, v + "%", { anchor: "end", size: 11, fill: C.faint });
     });
-  })();
+    txt(svg, padL - 30, padT - 8, "solve rate", { size: 11, fill: C.faint });
+    el("line", { x1: padL, y1: yOf(RESULTS.baselineSolve), x2: W - padR, y2: yOf(RESULTS.baselineSolve), stroke: C.faint, "stroke-dasharray": "4 4", "stroke-width": 1 }, svg);
+    txt(svg, W - padR, yOf(RESULTS.baselineSolve) - 5, "baseline 32%", { anchor: "end", size: 11, fill: C.faint });
+    Ns.forEach((nn, i) => txt(svg, xOf(i), H - padB + 22, "N=" + nn, { anchor: "middle", size: 12.5, fill: C.muted }));
+    txt(svg, W / 2, H - 10, "recursion depth", { anchor: "middle", size: 11, fill: C.muted });
+    let d = ""; Ns.forEach((nn, i) => (d += `${i === 0 ? "M" : "L"} ${xOf(i)} ${yOf(S[i])} `));
+    const p = el("path", { d, fill: "none", stroke: C.accent, "stroke-width": 3, "stroke-linejoin": "round" }, svg);
+    const L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+    requestAnimationFrame(() => { p.style.transition = "stroke-dashoffset 1.2s ease"; p.style.strokeDashoffset = 0; });
+    Ns.forEach((nn, i) => {
+      const c = el("circle", { cx: xOf(i), cy: yOf(S[i]), r: 4.5, fill: C.accent, opacity: 0 }, svg);
+      setTimeout(() => { c.style.transition = "opacity .3s"; c.setAttribute("opacity", 1); }, 900 + i * 120);
+      const t = txt(svg, xOf(i), yOf(S[i]) - 12, S[i] + "%", { anchor: "middle", size: 13, weight: 700, fill: C.accent }); t.style.opacity = 0;
+      setTimeout(() => { t.style.transition = "opacity .3s"; t.style.opacity = 1; }, 1000 + i * 120);
+    });
+  };
 
   /* ====================== kernels: reward + counters =================== */
   ONVIEW.reward = function () { const m = $("#rewardMarker"); if (m) setTimeout(() => (m.style.left = "60%"), 250); };
@@ -398,7 +409,8 @@
   hook("#driftbox", "drift");
   hook("#loopStage", "loop");
   hook("#variancePlot", "variance");
-  hook("#accPlot", "acc");
+  hook("#solveBars", "solveBars");
+  hook("#paradoxPlot", "paradox");
   hook("#rewardBar", "reward");
   $$(".card [data-count]").forEach((n) => { const card = n.closest(".card"); card.dataset.viz = "count"; vizIO.observe(card); });
 
@@ -407,7 +419,7 @@
   if (cap) {
     document.documentElement.style.scrollBehavior = "auto";
     $$(".reveal").forEach((n) => n.classList.add("in"));
-    [["#driftbox", "drift"], ["#loopStage", "loop"], ["#variancePlot", "variance"], ["#accPlot", "acc"], ["#rewardBar", "reward"]]
+    [["#driftbox", "drift"], ["#loopStage", "loop"], ["#variancePlot", "variance"], ["#solveBars", "solveBars"], ["#paradoxPlot", "paradox"], ["#rewardBar", "reward"]]
       .forEach(([sel, name]) => { const n = $(sel); if (n && !seen.has(n)) { seen.add(n); ONVIEW[name](n); } });
     $$(".card [data-count]").forEach((n) => { const c = n.closest(".card"); if (!seen.has(c)) { seen.add(c); ONVIEW.count(c); } });
     if (cap === "all") {
