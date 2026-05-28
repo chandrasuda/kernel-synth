@@ -216,7 +216,7 @@
     txt(svg, 860, cy - 18, "SDPO update", { anchor: "middle", size: 13, weight: 700, fill: C.accent });
     const core = el("circle", { cx: 860, cy: cy + 18, r: 16, fill: "none", stroke: C.accent, "stroke-width": 2 }, svg);
     el("circle", { cx: 860, cy: cy + 18, r: 6, fill: C.accent }, svg);
-    txt(svg, 860, cy + 75, "staleness-aware, always on", { anchor: "middle", size: 12, fill: C.muted });
+    txt(svg, 860, cy + 75, "staleness-aware \u00b7 always on", { anchor: "middle", size: 12, fill: C.muted });
 
     // connectors
     const fwd1 = el("path", { d: `M 240 ${cy} L 405 ${cy}`, fill: "none", stroke: C.accent, "stroke-width": 2, "marker-end": "url(#arrowB)" }, svg);

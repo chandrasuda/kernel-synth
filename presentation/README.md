@@ -1,4 +1,4 @@
-# Continuum — SymSys 161 final presentation
+# Continuum — research presentation
 
 A single-page, animated research-pitch site for **Continuum** (test-time
 asynchronous RL for deployed agents) and **SDPO** (our staleness-aware
@@ -22,9 +22,9 @@ python3 -m http.server 8791   # then visit http://127.0.0.1:8791/
 Navigate with **← / →** (or space, or scroll). The right-edge dots jump to
 any section.
 
-## Talk flow (~6 min)
+## Talk flow
 
-1. **Problem** (~1 min) — agents ship frozen; knowledge work needs continual
+1. **Problem** — agents ship frozen; knowledge work needs continual
    adaptation.
 2. **Continuum** — the test-time async-RL loop (Modal sandboxes, self-graded
    vs. human-graded rollouts).

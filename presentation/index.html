@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Continuum — Agents that keep learning · SymSys 161</title>
-<meta name="description" content="Continual test-time reinforcement learning for deployed agents, with a staleness-aware off-policy update. Chandra Suda & Aaditya Nalawade, SymSys 161 final." />
+<title>Continuum — Agents that keep learning</title>
+<meta name="description" content="Continual test-time reinforcement learning for deployed agents, with a staleness-aware off-policy update. Chandra Suda & Aaditya Nalawade." />
 <link rel="stylesheet" href="styles.css" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%233340c8' stroke-width='3'/%3E%3Ccircle cx='27' cy='16' r='4' fill='%23c0531a'/%3E%3C/svg%3E" />
 </head>
@@ -21,10 +21,10 @@
   <section class="slide hero" id="s-hero" data-label="Title">
     <canvas id="heroCanvas"></canvas>
     <div class="wrap">
-      <div class="eyebrow reveal">SymSys 161 · Final Presentation · Spring 2026</div>
+      <div class="eyebrow reveal">Continual learning for deployed agents</div>
       <h1 class="reveal d1">Agents that <span class="grad">keep learning</span> after they ship.</h1>
       <p class="sub reveal d2">
-        Today's agents are frozen the moment they deploy. This quarter we built
+        Today's agents are frozen the moment they deploy. We built
         <strong>Continuum</strong> &mdash; a test-time asynchronous-RL loop that lets a deployed agent
         improve from its own experience &mdash; and <strong>SDPO</strong>, a staleness-aware update that
         makes that loop stable.
@@ -32,9 +32,8 @@
       <div class="authors reveal d3">
         <span class="names">Chandra Suda &nbsp;·&nbsp; Aaditya Nalawade</span>
         <span class="meta">Stanford · Symbolic Systems</span>
-        <span class="meta"><span class="pulse-dot" style="display:inline-block;vertical-align:middle"></span> live demo &amp; code at the end</span>
       </div>
-      <div class="scroll-cue reveal d4"><span class="arrow">&darr;</span> a 6-minute walk through the quarter</div>
+      <div class="scroll-cue reveal d4"><span class="arrow">&darr;</span> Continuum &amp; SDPO</div>
     </div>
   </section>
 
@@ -59,7 +58,7 @@
         </div>
         <div>
           <div class="margin reveal d2">
-            <h4>Why this matters for SymSys 161</h4>
+            <h4>Why this matters</h4>
             The defensible products in knowledge work aren't the ones that answer a static benchmark &mdash;
             they're the ones that get sharper on <em>your</em> codebase, <em>your</em> customers, the longer
             you use them.
@@ -243,7 +242,7 @@
   <!-- ============================ RESULTS ============================ -->
   <section class="slide" id="s-results" data-label="Results">
     <div class="wrap">
-      <div class="section-no reveal">04 — Early results · LiveCodeBench</div>
+      <div class="section-no reveal">04 — LiveCodeBench</div>
       <h2 class="head reveal d1">We swapped the flat clip for SDPO &mdash; and the curve held.</h2>
       <p class="lede reveal d2 col">
         Same asynchronous setup on <strong>LiveCodeBench</strong>, changing <em>only</em> the off-policy update:
@@ -361,7 +360,7 @@
         </div>
         <div class="card reveal d3">
           <h3>The team</h3>
-          <p>Chandra Suda &amp; Aaditya Nalawade &mdash; SymSys 161, Spring 2026.</p>
+          <p>Chandra Suda &amp; Aaditya Nalawade.</p>
         </div>
       </div>
       <div class="footer-meta reveal d3">
